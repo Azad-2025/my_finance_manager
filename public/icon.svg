@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+    <linearGradient id="emerald" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#2563eb" />
+    </linearGradient>
+  </defs>
+  <!-- Background rounded squircle with safe padding -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)" />
+  <circle cx="256" cy="256" r="180" fill="none" stroke="#334155" stroke-width="4" stroke-dasharray="8 8" opacity="0.4" />
+  
+  <!-- Subtle Glowing Emblem Ring -->
+  <circle cx="256" cy="256" r="140" fill="none" stroke="url(#emerald)" stroke-width="14" opacity="0.8" />
+  
+  <!-- Bangladeshi Taka Symbol ৳ / Dynamic Stylized Finance Glyphs -->
+  <!-- Stylized geometric Bangladeshi Taka ৳ character -->
+  <g transform="translate(146, 126) scale(0.9)" fill="none" stroke="#f8fafc" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Main stem & curved loop of ৳ -->
+    <path d="M 50 140 C 50 70, 110 40, 160 40 C 210 40, 240 70, 240 120 C 240 170, 200 200, 140 200 L 140 250" stroke="#10b981" stroke-width="26" />
+    <path d="M 140 80 L 140 250" stroke="#f8fafc" stroke-width="24" />
+    <line x1="85" y1="130" x2="195" y2="130" stroke="#38bdf8" stroke-width="24" />
+    <!-- Dots & accent node -->
+    <circle cx="140" cy="245" r="14" fill="#10b981" />
+  </g>
+</svg>

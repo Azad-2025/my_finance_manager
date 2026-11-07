@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 100" fill="none">
+  <defs>
+    <linearGradient id="growthGradSvg" x1="10" y1="90" x2="90" y2="10" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#059669" />
+      <stop offset="100%" stop-color="#10b981" />
+    </linearGradient>
+  </defs>
+
+  <!-- Growth Mark 'M' with ascending trend arrow -->
+  <g transform="translate(0, 0)">
+    <!-- 1. Left Lower Bar -->
+    <path d="M 12 50 L 30 34 L 30 82 C 30 85.3 27.3 88 24 88 L 18 88 C 14.7 88 12 85.3 12 82 Z" fill="url(#growthGradSvg)" />
+    <!-- 2. Middle Lower Bar -->
+    <path d="M 41 54 L 59 38 L 59 82 C 59 85.3 56.3 88 53 88 L 47 88 C 43.7 88 41 85.3 41 82 Z" fill="url(#growthGradSvg)" />
+    <!-- 3. Right Lower Bar -->
+    <path d="M 70 42 L 88 26 L 88 82 C 88 85.3 85.3 88 82 88 L 76 88 C 72.7 88 70 85.3 70 82 Z" fill="url(#growthGradSvg)" />
+    <!-- 4. Ascending Arrow Crest -->
+    <path d="M 12 46 L 34 24 L 51 41 L 76 16 L 67 16 L 67 10 L 92 10 L 92 35 L 86 35 L 86 26 L 51 61 L 34 44 L 12 66 Z" fill="url(#growthGradSvg)" />
+  </g>
+
+  <!-- Wordmark "My Finance Manager" -->
+  <text x="110" y="44" font-family="Plus Jakarta Sans, Inter, sans-serif" font-weight="800" font-size="34" fill="#0F172A">My Finance</text>
+  <text x="110" y="82" font-family="Plus Jakarta Sans, Inter, sans-serif" font-weight="800" font-size="34" fill="#059669">Manager</text>
+</svg>

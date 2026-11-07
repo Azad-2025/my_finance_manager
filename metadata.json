@@ -1,0 +1,6 @@
+{
+  "name": "My Finance Manager",
+  "description": "Personal finance and expense management web application to track daily personal expenses, office expenses, borrowings, lendings, income, and financial analytics in BDT (৳).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
