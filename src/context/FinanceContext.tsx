@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
 import {
   Account,
   Category,
@@ -22,8 +22,159 @@ import {
   DEFAULT_CATEGORIES,
   DEFAULT_ACCOUNTS,
 } from '../lib/supabase';
+import {
+  generateUUID,
+  generateIdempotencyKey,
+  enqueueSyncItem,
+  getPendingSyncQueue,
+  removeQueueItem,
+  updateQueueItemStatus,
+  cacheStateSnapshot,
+  getCachedStateSnapshot,
+  OfflineQueueItem,
+} from '../lib/indexedDb';
 import { useAuth } from './AuthContext';
 import { getTodayString } from '../utils/formatters';
+
+export type SyncState = 'online' | 'offline' | 'syncing' | 'pending' | 'failed';
+
+function isValidUUID(val?: string | null): boolean {
+  if (!val) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+}
+
+/**
+ * Sanitizes entity payloads before cloud synchronization to ensure
+ * strict column adherence with PostgreSQL schema (no client helper fields).
+ */
+function sanitizeForSupabase(table: string, payload: any, userId: string): any {
+  const now = new Date().toISOString();
+  switch (table) {
+    case 'transactions':
+      return {
+        id: isValidUUID(payload.id) ? payload.id : generateUUID(),
+        user_id: userId,
+        date: payload.date || getTodayString(),
+        type: payload.type,
+        category: payload.category || 'Other',
+        description: payload.description || '',
+        amount: Number(payload.amount),
+        payment_method: payload.payment_method || 'Cash',
+        account_id: isValidUUID(payload.account_id) ? payload.account_id : null,
+        notes: payload.notes || null,
+        receipt_url: payload.receipt_url || null,
+        project_name: payload.project_name || null,
+        reimbursement_status: payload.reimbursement_status || 'Not Submitted',
+        reimbursed_amount: Number(payload.reimbursed_amount || 0),
+        created_at: payload.created_at || now,
+        updated_at: payload.updated_at || now,
+      };
+    case 'borrowings':
+      return {
+        id: isValidUUID(payload.id) ? payload.id : generateUUID(),
+        user_id: userId,
+        person_name: payload.person_name || '',
+        phone_number: payload.phone_number || null,
+        borrowed_date: payload.borrowed_date || getTodayString(),
+        amount: Number(payload.amount),
+        purpose: payload.purpose || null,
+        due_date: payload.due_date || null,
+        notes: payload.notes || null,
+        repaid_amount: Number(payload.repaid_amount || 0),
+        status: payload.status || 'Unpaid',
+        created_at: payload.created_at || now,
+        updated_at: payload.updated_at || now,
+      };
+    case 'borrowing_repayments':
+      return {
+        id: isValidUUID(payload.id) ? payload.id : generateUUID(),
+        borrowing_id: isValidUUID(payload.borrowing_id) ? payload.borrowing_id : generateUUID(),
+        user_id: userId,
+        payment_date: payload.payment_date || getTodayString(),
+        amount: Number(payload.amount),
+        payment_method: payload.payment_method || 'Cash',
+        account_id: isValidUUID(payload.account_id) ? payload.account_id : null,
+        notes: payload.notes || null,
+        created_at: payload.created_at || now,
+      };
+    case 'lendings':
+      return {
+        id: isValidUUID(payload.id) ? payload.id : generateUUID(),
+        user_id: userId,
+        person_name: payload.person_name || '',
+        phone_number: payload.phone_number || null,
+        lending_date: payload.lending_date || getTodayString(),
+        amount: Number(payload.amount),
+        purpose: payload.purpose || null,
+        expected_return_date: payload.expected_return_date || null,
+        notes: payload.notes || null,
+        collected_amount: Number(payload.collected_amount || 0),
+        status: payload.status || 'Uncollected',
+        created_at: payload.created_at || now,
+        updated_at: payload.updated_at || now,
+      };
+    case 'lending_collections':
+      return {
+        id: isValidUUID(payload.id) ? payload.id : generateUUID(),
+        lending_id: isValidUUID(payload.lending_id) ? payload.lending_id : generateUUID(),
+        user_id: userId,
+        collection_date: payload.collection_date || getTodayString(),
+        amount: Number(payload.amount),
+        payment_method: payload.payment_method || 'Cash',
+        account_id: isValidUUID(payload.account_id) ? payload.account_id : null,
+        notes: payload.notes || null,
+        created_at: payload.created_at || now,
+      };
+    case 'office_reimbursements':
+      return {
+        id: isValidUUID(payload.id) ? payload.id : generateUUID(),
+        transaction_id: isValidUUID(payload.transaction_id) ? payload.transaction_id : generateUUID(),
+        user_id: userId,
+        reimbursement_date: payload.reimbursement_date || getTodayString(),
+        amount: Number(payload.amount),
+        payment_method: payload.payment_method || 'Cash',
+        account_id: isValidUUID(payload.account_id) ? payload.account_id : null,
+        notes: payload.notes || null,
+        created_at: payload.created_at || now,
+      };
+    case 'account_transfers':
+      return {
+        id: isValidUUID(payload.id) ? payload.id : generateUUID(),
+        user_id: userId,
+        transfer_date: payload.transfer_date || getTodayString(),
+        from_account_id: isValidUUID(payload.from_account_id) ? payload.from_account_id : generateUUID(),
+        to_account_id: isValidUUID(payload.to_account_id) ? payload.to_account_id : generateUUID(),
+        amount: Number(payload.amount),
+        notes: payload.notes || null,
+        created_at: payload.created_at || now,
+      };
+    case 'accounts':
+      return {
+        id: isValidUUID(payload.id) ? payload.id : generateUUID(),
+        user_id: userId,
+        name: payload.name,
+        type: payload.type || 'Cash Wallet',
+        balance: Number(payload.balance || 0),
+        account_number: payload.account_number || null,
+        is_default: Boolean(payload.is_default),
+        created_at: payload.created_at || now,
+        updated_at: payload.updated_at || now,
+      };
+    case 'categories':
+      return {
+        id: isValidUUID(payload.id) ? payload.id : generateUUID(),
+        user_id: userId,
+        name: payload.name,
+        type: payload.type,
+        icon: payload.icon || null,
+        color: payload.color || null,
+        is_custom: Boolean(payload.is_custom),
+        created_at: payload.created_at || now,
+      };
+    default:
+      return { ...payload, user_id: userId };
+  }
+}
 
 interface FinanceContextType {
   accounts: Account[];
@@ -38,6 +189,9 @@ interface FinanceContextType {
   summary: FinancialSummary;
   loading: boolean;
   syncing: boolean;
+  syncState: SyncState;
+  pendingSyncCount: number;
+  syncError?: string;
 
   // Transaction operations
   addTransaction: (tx: Omit<Transaction, 'id' | 'created_at' | 'updated_at'>) => Promise<Transaction>;
@@ -91,11 +245,12 @@ interface FinanceContextType {
   updateCategory: (cat: Category) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
 
-  // Import / Export
+  // Import / Export & Sync
   exportToCSV: (type?: 'all' | 'transactions' | 'personal' | 'office' | 'income' | 'borrowings' | 'lendings') => void;
   exportCompleteJSON: () => string;
   importJSON: (jsonStr: string) => { success: boolean; message: string };
   syncToSupabase: () => Promise<{ success: boolean; error?: string }>;
+  processPendingOfflineQueue: () => Promise<void>;
   refreshData: () => Promise<void>;
   clearAllData: () => void;
 }
@@ -106,6 +261,9 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [syncError, setSyncError] = useState<string | undefined>(undefined);
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -117,14 +275,79 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [officeReimbursements, setOfficeReimbursements] = useState<OfficeReimbursement[]>([]);
   const [transfers, setTransfers] = useState<AccountTransfer[]>([]);
 
-  // Load data on mount or when user changes
+  // Connectivity tracking
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      processPendingOfflineQueue();
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Update pending queue count
+  const refreshPendingCount = useCallback(async () => {
+    try {
+      const queue = await getPendingSyncQueue();
+      setPendingSyncCount(queue.length);
+    } catch {
+      setPendingSyncCount(0);
+    }
+  }, []);
+
+  // Load initial data safely from IndexedDB / LocalStorage / Supabase
   const loadData = async () => {
     setLoading(true);
-    const supabase = getSupabase();
+    setSyncError(undefined);
 
-    if (supabase && user) {
+    // 1. Initial hydrate from durable IndexedDB snapshot or LocalStorage
+    let initialLoaded = false;
+    try {
+      const cached = await getCachedStateSnapshot<FinanceDatabaseState>('primary_finance_state');
+      if (cached && cached.accounts && cached.accounts.length > 0) {
+        setAccounts(cached.accounts);
+        setCategories(cached.categories || DEFAULT_CATEGORIES);
+        setTransactions(cached.transactions || []);
+        setBorrowings(cached.borrowings || []);
+        setBorrowingRepayments(cached.borrowing_repayments || []);
+        setLendings(cached.lendings || []);
+        setLendingCollections(cached.lending_collections || []);
+        setOfficeReimbursements(cached.office_reimbursements || []);
+        setTransfers(cached.transfers || []);
+        initialLoaded = true;
+      }
+    } catch (e) {
+      console.debug('IndexedDB initial snapshot miss:', e);
+    }
+
+    if (!initialLoaded) {
+      const local = loadLocalData();
+      setAccounts(local.accounts || DEFAULT_ACCOUNTS);
+      setCategories(local.categories || DEFAULT_CATEGORIES);
+      setTransactions(local.transactions || []);
+      setBorrowings(local.borrowings || []);
+      setBorrowingRepayments(local.borrowing_repayments || []);
+      setLendings(local.lendings || []);
+      setLendingCollections(local.lending_collections || []);
+      setOfficeReimbursements(local.office_reimbursements || []);
+      setTransfers(local.transfers || []);
+    }
+
+    await refreshPendingCount();
+
+    // 2. If online and Supabase is configured with user, pull cloud records safely
+    const supabase = getSupabase();
+    if (supabase && user && navigator.onLine) {
       try {
-        // Fetch from Supabase
         const [
           { data: accData },
           { data: catData },
@@ -147,33 +370,20 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
           supabase.from('account_transfers').select('*').order('transfer_date', { ascending: false }),
         ]);
 
-        setAccounts(accData || DEFAULT_ACCOUNTS);
-        setCategories(catData || DEFAULT_CATEGORIES);
-        setTransactions(txData || []);
-        setBorrowings(borData || []);
-        setBorrowingRepayments(borRepData || []);
-        setLendings(lenData || []);
-        setLendingCollections(lenColData || []);
-        setOfficeReimbursements(offReimbData || []);
-        setTransfers(trData || []);
-        setLoading(false);
-        return;
-      } catch (e) {
-        console.warn('Error fetching from Supabase, falling back to local store:', e);
+        if (accData && accData.length > 0) setAccounts(accData);
+        if (catData && catData.length > 0) setCategories(catData);
+        if (txData) setTransactions(txData);
+        if (borData) setBorrowings(borData);
+        if (borRepData) setBorrowingRepayments(borRepData);
+        if (lenData) setLendings(lenData);
+        if (lenColData) setLendingCollections(lenColData);
+        if (offReimbData) setOfficeReimbursements(offReimbData);
+        if (trData) setTransfers(trData);
+      } catch (e: any) {
+        console.warn('Error fetching from Supabase, using local state:', e);
       }
     }
 
-    // Offline / Demo / Fallback Store
-    const local = loadLocalData();
-    setAccounts(local.accounts || DEFAULT_ACCOUNTS);
-    setCategories(local.categories || DEFAULT_CATEGORIES);
-    setTransactions(local.transactions || []);
-    setBorrowings(local.borrowings || []);
-    setBorrowingRepayments(local.borrowing_repayments || []);
-    setLendings(local.lendings || []);
-    setLendingCollections(local.lending_collections || []);
-    setOfficeReimbursements(local.office_reimbursements || []);
-    setTransfers(local.transfers || []);
     setLoading(false);
   };
 
@@ -181,10 +391,10 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     loadData();
   }, [user]);
 
-  // Persist local store whenever state changes (keeps offline sandbox 100% updated)
+  // Persist state to both LocalStorage and IndexedDB snapshots
   useEffect(() => {
     if (!loading) {
-      saveLocalData({
+      const stateToPersist: FinanceDatabaseState = {
         accounts,
         categories,
         transactions,
@@ -194,7 +404,10 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         lending_collections: lendingCollections,
         office_reimbursements: officeReimbursements,
         transfers,
-      });
+      };
+
+      saveLocalData(stateToPersist);
+      cacheStateSnapshot('primary_finance_state', stateToPersist).catch(() => {});
     }
   }, [
     accounts,
@@ -208,6 +421,78 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     transfers,
     loading,
   ]);
+
+  // -------------------------------------------------------------------------
+  // Safe Offline Queue Processor
+  // Processes pending offline sync records sequentially without duplicates
+  // -------------------------------------------------------------------------
+  const processPendingOfflineQueue = useCallback(async () => {
+    const supabase = getSupabase();
+    if (!supabase || !user || !navigator.onLine) return;
+
+    const queue: OfflineQueueItem[] = await getPendingSyncQueue();
+    if (queue.length === 0) {
+      setPendingSyncCount(0);
+      return;
+    }
+
+    setSyncing(true);
+    setSyncError(undefined);
+
+    for (const item of queue) {
+      if (!item.queue_id) continue;
+      try {
+        await updateQueueItemStatus(item.queue_id, 'syncing');
+
+        const table =
+          item.entity_type === 'transaction'
+            ? 'transactions'
+            : item.entity_type === 'borrowing'
+            ? 'borrowings'
+            : item.entity_type === 'lending'
+            ? 'lendings'
+            : item.entity_type === 'repayment'
+            ? 'borrowing_repayments'
+            : item.entity_type === 'collection'
+            ? 'lending_collections'
+            : item.entity_type === 'reimbursement'
+            ? 'office_reimbursements'
+            : item.entity_type === 'account'
+            ? 'accounts'
+            : item.entity_type === 'category'
+            ? 'categories'
+            : 'account_transfers';
+
+        if (item.action === 'insert' || item.action === 'update') {
+          const sanitized = sanitizeForSupabase(table, item.payload, user.id);
+          await supabase.from(table).upsert(sanitized);
+        } else if (item.action === 'delete') {
+          if (isValidUUID(item.record_id)) {
+            await supabase.from(table).delete().eq('id', item.record_id);
+          }
+        }
+
+        // Successfully synced
+        await removeQueueItem(item.queue_id);
+      } catch (err: any) {
+        console.warn(`Sync failed for queue item ${item.queue_id}:`, err);
+        await updateQueueItemStatus(item.queue_id, 'failed', err?.message || 'Sync error');
+        setSyncError(err?.message || 'Sync encountered an error');
+      }
+    }
+
+    setSyncing(false);
+    await refreshPendingCount();
+  }, [user, refreshPendingCount]);
+
+  // Derive SyncState
+  const syncState: SyncState = useMemo(() => {
+    if (!isOnline) return 'offline';
+    if (syncing) return 'syncing';
+    if (syncError) return 'failed';
+    if (pendingSyncCount > 0) return 'pending';
+    return 'online';
+  }, [isOnline, syncing, syncError, pendingSyncCount]);
 
   // Calculate comprehensive financial summary
   const summary = useMemo<FinancialSummary>(() => {
@@ -247,10 +532,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     });
 
-    // Pending office reimbursement receivable
     const pendingOfficeReimbursement = Math.max(0, totalOfficeExpenses - officeReimbursedAmount);
 
-    // Borrowed Money (Liabilities)
     let totalBorrowed = 0;
     let totalBorrowedRepaid = 0;
     borrowings.forEach((b) => {
@@ -259,7 +542,6 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     });
     const amountIOwe = Math.max(0, totalBorrowed - totalBorrowedRepaid);
 
-    // Lent Money (Receivables)
     let totalLent = 0;
     let totalLentCollected = 0;
     lendings.forEach((l) => {
@@ -268,7 +550,6 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     });
     const amountOwedToMe = Math.max(0, totalLent - totalLentCollected);
 
-    // Total account balance
     const totalBalance = accounts.reduce((acc, a) => acc + Number(a.balance), 0);
 
     return {
@@ -292,19 +573,25 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [accounts, transactions, borrowings, lendings]);
 
   // =========================================================================
-  // TRANSACTION OPERATIONS
+  // TRANSACTION OPERATIONS (Client UUID + Idempotency + Offline Queue)
   // =========================================================================
   const addTransaction = async (
     txData: Omit<Transaction, 'id' | 'created_at' | 'updated_at'>
   ): Promise<Transaction> => {
-    const id = `tx-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const id = generateUUID();
     const nowStr = new Date().toISOString();
+    const idemKey = generateIdempotencyKey('tx', id);
+
+    const isConnected = navigator.onLine && Boolean(getSupabase() && user);
 
     const newTx: Transaction = {
       ...txData,
       id,
       reimbursed_amount: txData.reimbursed_amount || 0,
-      reimbursement_status: txData.type === 'office_expense' ? (txData.reimbursement_status || 'Not Submitted') : undefined,
+      reimbursement_status:
+        txData.type === 'office_expense' ? txData.reimbursement_status || 'Not Submitted' : undefined,
+      sync_status: isConnected ? 'synced' : 'pending',
+      idempotency_key: idemKey,
       created_at: nowStr,
       updated_at: nowStr,
     };
@@ -324,15 +611,14 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     setTransactions((prev) => [newTx, ...prev]);
 
-    // Supabase write
+    // Handle Cloud or Offline Queue
     const supabase = getSupabase();
-    if (supabase && user) {
+    if (isConnected && supabase && user) {
       try {
-        await supabase.from('transactions').insert({
-          ...newTx,
-          user_id: user.id,
-        });
-        if (newTx.account_id) {
+        const sanitized = sanitizeForSupabase('transactions', newTx, user.id);
+        await supabase.from('transactions').insert(sanitized);
+
+        if (newTx.account_id && isValidUUID(newTx.account_id)) {
           const acc = accounts.find((a) => a.id === newTx.account_id);
           if (acc) {
             const newBal = acc.balance + (newTx.type === 'income' ? newTx.amount : -newTx.amount);
@@ -340,8 +626,28 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
           }
         }
       } catch (err) {
-        console.error('Supabase transaction insert error:', err);
+        console.warn('Online insert failed, queuing offline:', err);
+        await enqueueSyncItem({
+          idempotency_key: idemKey,
+          entity_type: 'transaction',
+          action: 'insert',
+          record_id: id,
+          payload: newTx,
+          status: 'pending',
+        });
+        await refreshPendingCount();
       }
+    } else {
+      // Store in offline sync queue
+      await enqueueSyncItem({
+        idempotency_key: idemKey,
+        entity_type: 'transaction',
+        action: 'insert',
+        record_id: id,
+        payload: newTx,
+        status: 'pending',
+      });
+      await refreshPendingCount();
     }
 
     return newTx;
@@ -350,10 +656,13 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const updateTransaction = async (updatedTx: Transaction) => {
     const existing = transactions.find((t) => t.id === updatedTx.id);
     const nowStr = new Date().toISOString();
-    const txWithTs = { ...updatedTx, updated_at: nowStr };
+    const txWithTs: Transaction = {
+      ...updatedTx,
+      sync_status: navigator.onLine ? 'synced' : 'pending',
+      updated_at: nowStr,
+    };
 
     if (existing) {
-      // Revert previous account impact
       setAccounts((prev) =>
         prev.map((acc) => {
           let bal = acc.balance;
@@ -371,12 +680,32 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setTransactions((prev) => prev.map((t) => (t.id === updatedTx.id ? txWithTs : t)));
 
     const supabase = getSupabase();
-    if (supabase && user) {
+    if (navigator.onLine && supabase && user) {
       try {
-        await supabase.from('transactions').update({ ...txWithTs }).eq('id', updatedTx.id);
+        const sanitized = sanitizeForSupabase('transactions', txWithTs, user.id);
+        await supabase.from('transactions').update(sanitized).eq('id', updatedTx.id);
       } catch (err) {
-        console.error('Supabase transaction update error:', err);
+        console.warn('Update online failed, queuing:', err);
+        await enqueueSyncItem({
+          idempotency_key: generateIdempotencyKey('tx_upd', updatedTx.id),
+          entity_type: 'transaction',
+          action: 'update',
+          record_id: updatedTx.id,
+          payload: txWithTs,
+          status: 'pending',
+        });
+        await refreshPendingCount();
       }
+    } else {
+      await enqueueSyncItem({
+        idempotency_key: generateIdempotencyKey('tx_upd', updatedTx.id),
+        entity_type: 'transaction',
+        action: 'update',
+        record_id: updatedTx.id,
+        payload: txWithTs,
+        status: 'pending',
+      });
+      await refreshPendingCount();
     }
   };
 
@@ -385,7 +714,6 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!target) return;
     const nowStr = new Date().toISOString();
 
-    // Revert account balance impact
     if (target.account_id) {
       setAccounts((prev) =>
         prev.map((acc) => {
@@ -401,12 +729,32 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setTransactions((prev) => prev.filter((t) => t.id !== id));
 
     const supabase = getSupabase();
-    if (supabase && user) {
+    if (navigator.onLine && supabase && user) {
       try {
-        await supabase.from('transactions').delete().eq('id', id);
+        if (isValidUUID(id)) {
+          await supabase.from('transactions').delete().eq('id', id);
+        }
       } catch (err) {
-        console.error('Supabase transaction delete error:', err);
+        await enqueueSyncItem({
+          idempotency_key: generateIdempotencyKey('tx_del', id),
+          entity_type: 'transaction',
+          action: 'delete',
+          record_id: id,
+          payload: { id },
+          status: 'pending',
+        });
+        await refreshPendingCount();
       }
+    } else {
+      await enqueueSyncItem({
+        idempotency_key: generateIdempotencyKey('tx_del', id),
+        entity_type: 'transaction',
+        action: 'delete',
+        record_id: id,
+        payload: { id },
+        status: 'pending',
+      });
+      await refreshPendingCount();
     }
   };
 
@@ -416,14 +764,17 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const addBorrowing = async (
     bData: Omit<Borrowing, 'id' | 'repaid_amount' | 'status' | 'created_at' | 'updated_at'>
   ): Promise<Borrowing> => {
-    const id = `bor-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const id = generateUUID();
     const nowStr = new Date().toISOString();
+    const idemKey = generateIdempotencyKey('bor', id);
 
     const newBorrowing: Borrowing = {
       ...bData,
       id,
       repaid_amount: 0,
       status: 'Unpaid',
+      sync_status: navigator.onLine ? 'synced' : 'pending',
+      idempotency_key: idemKey,
       created_at: nowStr,
       updated_at: nowStr,
     };
@@ -431,15 +782,31 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setBorrowings((prev) => [newBorrowing, ...prev]);
 
     const supabase = getSupabase();
-    if (supabase && user) {
+    if (navigator.onLine && supabase && user) {
       try {
-        await supabase.from('borrowings').insert({
-          ...newBorrowing,
-          user_id: user.id,
-        });
+        const sanitized = sanitizeForSupabase('borrowings', newBorrowing, user.id);
+        await supabase.from('borrowings').insert(sanitized);
       } catch (err) {
-        console.error('Supabase borrowing insert error:', err);
+        await enqueueSyncItem({
+          idempotency_key: idemKey,
+          entity_type: 'borrowing',
+          action: 'insert',
+          record_id: id,
+          payload: newBorrowing,
+          status: 'pending',
+        });
+        await refreshPendingCount();
       }
+    } else {
+      await enqueueSyncItem({
+        idempotency_key: idemKey,
+        entity_type: 'borrowing',
+        action: 'insert',
+        record_id: id,
+        payload: newBorrowing,
+        status: 'pending',
+      });
+      await refreshPendingCount();
     }
 
     return newBorrowing;
@@ -455,8 +822,9 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const borrowing = borrowings.find((b) => b.id === borrowingId);
     if (!borrowing) return;
 
-    const repId = `rep-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const repId = generateUUID();
     const nowStr = new Date().toISOString();
+    const idemKey = generateIdempotencyKey('rep', repId);
 
     const newRepayment: BorrowingRepayment = {
       id: repId,
@@ -466,6 +834,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       payment_method: paymentMethod,
       account_id: accountId,
       notes,
+      sync_status: navigator.onLine ? 'synced' : 'pending',
+      idempotency_key: idemKey,
       created_at: nowStr,
     };
 
@@ -483,7 +853,6 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     setBorrowingRepayments((prev) => [newRepayment, ...prev]);
 
-    // Repayment deducts from user's account balance (reducing liability)
     if (accountId) {
       setAccounts((prev) =>
         prev.map((acc) =>
@@ -493,19 +862,38 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     const supabase = getSupabase();
-    if (supabase && user) {
+    if (navigator.onLine && supabase && user) {
       try {
-        await supabase.from('borrowing_repayments').insert({
-          ...newRepayment,
-          user_id: user.id,
+        const sanitized = sanitizeForSupabase('borrowing_repayments', newRepayment, user.id);
+        await supabase.from('borrowing_repayments').insert(sanitized);
+
+        if (isValidUUID(borrowingId)) {
+          await supabase
+            .from('borrowings')
+            .update({ repaid_amount: newRepaidAmount, status: newStatus, updated_at: nowStr })
+            .eq('id', borrowingId);
+        }
+      } catch {
+        await enqueueSyncItem({
+          idempotency_key: idemKey,
+          entity_type: 'repayment',
+          action: 'insert',
+          record_id: repId,
+          payload: newRepayment,
+          status: 'pending',
         });
-        await supabase
-          .from('borrowings')
-          .update({ repaid_amount: newRepaidAmount, status: newStatus, updated_at: nowStr })
-          .eq('id', borrowingId);
-      } catch (err) {
-        console.error('Supabase borrowing repayment error:', err);
+        await refreshPendingCount();
       }
+    } else {
+      await enqueueSyncItem({
+        idempotency_key: idemKey,
+        entity_type: 'repayment',
+        action: 'insert',
+        record_id: repId,
+        payload: newRepayment,
+        status: 'pending',
+      });
+      await refreshPendingCount();
     }
   };
 
@@ -514,11 +902,21 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setBorrowingRepayments((prev) => prev.filter((r) => r.borrowing_id !== id));
 
     const supabase = getSupabase();
-    if (supabase && user) {
+    if (navigator.onLine && supabase && user) {
       try {
-        await supabase.from('borrowings').delete().eq('id', id);
-      } catch (err) {
-        console.error('Supabase borrowing delete error:', err);
+        if (isValidUUID(id)) {
+          await supabase.from('borrowings').delete().eq('id', id);
+        }
+      } catch {
+        await enqueueSyncItem({
+          idempotency_key: generateIdempotencyKey('bor_del', id),
+          entity_type: 'borrowing',
+          action: 'delete',
+          record_id: id,
+          payload: { id },
+          status: 'pending',
+        });
+        await refreshPendingCount();
       }
     }
   };
@@ -529,14 +927,17 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const addLending = async (
     lData: Omit<Lending, 'id' | 'collected_amount' | 'status' | 'created_at' | 'updated_at'>
   ): Promise<Lending> => {
-    const id = `len-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const id = generateUUID();
     const nowStr = new Date().toISOString();
+    const idemKey = generateIdempotencyKey('len', id);
 
     const newLending: Lending = {
       ...lData,
       id,
       collected_amount: 0,
       status: 'Uncollected',
+      sync_status: navigator.onLine ? 'synced' : 'pending',
+      idempotency_key: idemKey,
       created_at: nowStr,
       updated_at: nowStr,
     };
@@ -544,15 +945,31 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setLendings((prev) => [newLending, ...prev]);
 
     const supabase = getSupabase();
-    if (supabase && user) {
+    if (navigator.onLine && supabase && user) {
       try {
-        await supabase.from('lendings').insert({
-          ...newLending,
-          user_id: user.id,
+        const sanitized = sanitizeForSupabase('lendings', newLending, user.id);
+        await supabase.from('lendings').insert(sanitized);
+      } catch {
+        await enqueueSyncItem({
+          idempotency_key: idemKey,
+          entity_type: 'lending',
+          action: 'insert',
+          record_id: id,
+          payload: newLending,
+          status: 'pending',
         });
-      } catch (err) {
-        console.error('Supabase lending insert error:', err);
+        await refreshPendingCount();
       }
+    } else {
+      await enqueueSyncItem({
+        idempotency_key: idemKey,
+        entity_type: 'lending',
+        action: 'insert',
+        record_id: id,
+        payload: newLending,
+        status: 'pending',
+      });
+      await refreshPendingCount();
     }
 
     return newLending;
@@ -568,8 +985,9 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const lending = lendings.find((l) => l.id === lendingId);
     if (!lending) return;
 
-    const colId = `col-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const colId = generateUUID();
     const nowStr = new Date().toISOString();
+    const idemKey = generateIdempotencyKey('col', colId);
 
     const newCollection: LendingCollection = {
       id: colId,
@@ -579,6 +997,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       payment_method: paymentMethod,
       account_id: accountId,
       notes,
+      sync_status: navigator.onLine ? 'synced' : 'pending',
+      idempotency_key: idemKey,
       created_at: nowStr,
     };
 
@@ -596,7 +1016,6 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     setLendingCollections((prev) => [newCollection, ...prev]);
 
-    // Collection adds to user's account balance (reducing receivable)
     if (accountId) {
       setAccounts((prev) =>
         prev.map((acc) =>
@@ -606,19 +1025,38 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     const supabase = getSupabase();
-    if (supabase && user) {
+    if (navigator.onLine && supabase && user) {
       try {
-        await supabase.from('lending_collections').insert({
-          ...newCollection,
-          user_id: user.id,
+        const sanitized = sanitizeForSupabase('lending_collections', newCollection, user.id);
+        await supabase.from('lending_collections').insert(sanitized);
+
+        if (isValidUUID(lendingId)) {
+          await supabase
+            .from('lendings')
+            .update({ collected_amount: newCollectedAmount, status: newStatus, updated_at: nowStr })
+            .eq('id', lendingId);
+        }
+      } catch {
+        await enqueueSyncItem({
+          idempotency_key: idemKey,
+          entity_type: 'collection',
+          action: 'insert',
+          record_id: colId,
+          payload: newCollection,
+          status: 'pending',
         });
-        await supabase
-          .from('lendings')
-          .update({ collected_amount: newCollectedAmount, status: newStatus, updated_at: nowStr })
-          .eq('id', lendingId);
-      } catch (err) {
-        console.error('Supabase lending collection error:', err);
+        await refreshPendingCount();
       }
+    } else {
+      await enqueueSyncItem({
+        idempotency_key: idemKey,
+        entity_type: 'collection',
+        action: 'insert',
+        record_id: colId,
+        payload: newCollection,
+        status: 'pending',
+      });
+      await refreshPendingCount();
     }
   };
 
@@ -627,11 +1065,21 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setLendingCollections((prev) => prev.filter((c) => c.lending_id !== id));
 
     const supabase = getSupabase();
-    if (supabase && user) {
+    if (navigator.onLine && supabase && user) {
       try {
-        await supabase.from('lendings').delete().eq('id', id);
-      } catch (err) {
-        console.error('Supabase lending delete error:', err);
+        if (isValidUUID(id)) {
+          await supabase.from('lendings').delete().eq('id', id);
+        }
+      } catch {
+        await enqueueSyncItem({
+          idempotency_key: generateIdempotencyKey('len_del', id),
+          entity_type: 'lending',
+          action: 'delete',
+          record_id: id,
+          payload: { id },
+          status: 'pending',
+        });
+        await refreshPendingCount();
       }
     }
   };
@@ -649,8 +1097,9 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const tx = transactions.find((t) => t.id === transactionId && t.type === 'office_expense');
     if (!tx) return;
 
-    const reimbId = `reimb-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const reimbId = generateUUID();
     const nowStr = new Date().toISOString();
+    const idemKey = generateIdempotencyKey('reimb', reimbId);
 
     const newReimb: OfficeReimbursement = {
       id: reimbId,
@@ -660,6 +1109,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       payment_method: paymentMethod,
       account_id: accountId,
       notes,
+      sync_status: navigator.onLine ? 'synced' : 'pending',
+      idempotency_key: idemKey,
       created_at: nowStr,
     };
 
@@ -682,7 +1133,6 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     setOfficeReimbursements((prev) => [newReimb, ...prev]);
 
-    // Reimbursement money received into user's account (not counted as new income, reduces receivable)
     if (accountId) {
       setAccounts((prev) =>
         prev.map((acc) =>
@@ -692,23 +1142,42 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     const supabase = getSupabase();
-    if (supabase && user) {
+    if (navigator.onLine && supabase && user) {
       try {
-        await supabase.from('office_reimbursements').insert({
-          ...newReimb,
-          user_id: user.id,
+        const sanitized = sanitizeForSupabase('office_reimbursements', newReimb, user.id);
+        await supabase.from('office_reimbursements').insert(sanitized);
+
+        if (isValidUUID(transactionId)) {
+          await supabase
+            .from('transactions')
+            .update({
+              reimbursed_amount: newReimbursedAmount,
+              reimbursement_status: newStatus,
+              updated_at: nowStr,
+            })
+            .eq('id', transactionId);
+        }
+      } catch {
+        await enqueueSyncItem({
+          idempotency_key: idemKey,
+          entity_type: 'reimbursement',
+          action: 'insert',
+          record_id: reimbId,
+          payload: newReimb,
+          status: 'pending',
         });
-        await supabase
-          .from('transactions')
-          .update({
-            reimbursed_amount: newReimbursedAmount,
-            reimbursement_status: newStatus,
-            updated_at: nowStr,
-          })
-          .eq('id', transactionId);
-      } catch (err) {
-        console.error('Supabase office reimbursement error:', err);
+        await refreshPendingCount();
       }
+    } else {
+      await enqueueSyncItem({
+        idempotency_key: idemKey,
+        entity_type: 'reimbursement',
+        action: 'insert',
+        record_id: reimbId,
+        payload: newReimb,
+        status: 'pending',
+      });
+      await refreshPendingCount();
     }
   };
 
@@ -718,7 +1187,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const addAccount = async (
     accData: Omit<Account, 'id' | 'created_at' | 'updated_at'>
   ): Promise<Account> => {
-    const id = `acc-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const id = generateUUID();
     const nowStr = new Date().toISOString();
 
     const newAccount: Account = {
@@ -731,14 +1200,12 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setAccounts((prev) => [...prev, newAccount]);
 
     const supabase = getSupabase();
-    if (supabase && user) {
+    if (navigator.onLine && supabase && user) {
       try {
-        await supabase.from('accounts').insert({
-          ...newAccount,
-          user_id: user.id,
-        });
-      } catch (err) {
-        console.error('Supabase account insert error:', err);
+        const sanitized = sanitizeForSupabase('accounts', newAccount, user.id);
+        await supabase.from('accounts').insert(sanitized);
+      } catch {
+        // Fallback to local
       }
     }
 
@@ -752,11 +1219,14 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setAccounts((prev) => prev.map((a) => (a.id === acc.id ? updated : a)));
 
     const supabase = getSupabase();
-    if (supabase && user) {
+    if (navigator.onLine && supabase && user) {
       try {
-        await supabase.from('accounts').update({ ...updated }).eq('id', acc.id);
-      } catch (err) {
-        console.error('Supabase account update error:', err);
+        if (isValidUUID(acc.id)) {
+          const sanitized = sanitizeForSupabase('accounts', updated, user.id);
+          await supabase.from('accounts').update(sanitized).eq('id', acc.id);
+        }
+      } catch {
+        // Fallback to local
       }
     }
   };
@@ -765,11 +1235,13 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setAccounts((prev) => prev.filter((a) => a.id !== id));
 
     const supabase = getSupabase();
-    if (supabase && user) {
+    if (navigator.onLine && supabase && user) {
       try {
-        await supabase.from('accounts').delete().eq('id', id);
-      } catch (err) {
-        console.error('Supabase account delete error:', err);
+        if (isValidUUID(id)) {
+          await supabase.from('accounts').delete().eq('id', id);
+        }
+      } catch {
+        // Fallback to local
       }
     }
   };
@@ -784,7 +1256,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const toAcc = accounts.find((a) => a.id === toId);
     if (!fromAcc || !toAcc || fromId === toId) return;
 
-    const trId = `tr-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const trId = generateUUID();
     const nowStr = new Date().toISOString();
 
     const transferRecord: AccountTransfer = {
@@ -814,16 +1286,19 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setTransfers((prev) => [transferRecord, ...prev]);
 
     const supabase = getSupabase();
-    if (supabase && user) {
+    if (navigator.onLine && supabase && user) {
       try {
-        await supabase.from('account_transfers').insert({
-          ...transferRecord,
-          user_id: user.id,
-        });
-        await supabase.from('accounts').update({ balance: fromAcc.balance - amount, updated_at: nowStr }).eq('id', fromId);
-        await supabase.from('accounts').update({ balance: toAcc.balance + amount, updated_at: nowStr }).eq('id', toId);
-      } catch (err) {
-        console.error('Supabase account transfer error:', err);
+        const sanitized = sanitizeForSupabase('account_transfers', transferRecord, user.id);
+        await supabase.from('account_transfers').insert(sanitized);
+
+        if (isValidUUID(fromId)) {
+          await supabase.from('accounts').update({ balance: fromAcc.balance - amount, updated_at: nowStr }).eq('id', fromId);
+        }
+        if (isValidUUID(toId)) {
+          await supabase.from('accounts').update({ balance: toAcc.balance + amount, updated_at: nowStr }).eq('id', toId);
+        }
+      } catch {
+        // Fallback to local
       }
     }
   };
@@ -834,7 +1309,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const addCategory = async (
     catData: Omit<Category, 'id' | 'created_at'>
   ): Promise<Category> => {
-    const id = `cat-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const id = generateUUID();
     const nowStr = new Date().toISOString();
 
     const newCat: Category = {
@@ -847,14 +1322,12 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setCategories((prev) => [...prev, newCat]);
 
     const supabase = getSupabase();
-    if (supabase && user) {
+    if (navigator.onLine && supabase && user) {
       try {
-        await supabase.from('categories').insert({
-          ...newCat,
-          user_id: user.id,
-        });
-      } catch (err) {
-        console.error('Supabase category insert error:', err);
+        const sanitized = sanitizeForSupabase('categories', newCat, user.id);
+        await supabase.from('categories').insert(sanitized);
+      } catch {
+        // Fallback to local
       }
     }
 
@@ -865,11 +1338,13 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setCategories((prev) => prev.map((c) => (c.id === cat.id ? cat : c)));
 
     const supabase = getSupabase();
-    if (supabase && user) {
+    if (navigator.onLine && supabase && user) {
       try {
-        await supabase.from('categories').update({ name: cat.name, color: cat.color }).eq('id', cat.id);
-      } catch (err) {
-        console.error('Supabase category update error:', err);
+        if (isValidUUID(cat.id)) {
+          await supabase.from('categories').update({ name: cat.name, color: cat.color }).eq('id', cat.id);
+        }
+      } catch {
+        // Fallback to local
       }
     }
   };
@@ -878,11 +1353,13 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setCategories((prev) => prev.filter((c) => c.id !== id));
 
     const supabase = getSupabase();
-    if (supabase && user) {
+    if (navigator.onLine && supabase && user) {
       try {
-        await supabase.from('categories').delete().eq('id', id);
-      } catch (err) {
-        console.error('Supabase category delete error:', err);
+        if (isValidUUID(id)) {
+          await supabase.from('categories').delete().eq('id', id);
+        }
+      } catch {
+        // Fallback to local
       }
     }
   };
@@ -983,29 +1460,93 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return JSON.stringify(backup, null, 2);
   };
 
+  /**
+   * Safe, non-destructive restoration that merges backup records
+   * without overwriting or duplicating existing data.
+   */
   const importJSON = (jsonStr: string): { success: boolean; message: string } => {
     try {
       const data = JSON.parse(jsonStr) as Partial<FinanceDatabaseState>;
-      if (!data.transactions || !Array.isArray(data.transactions)) {
-        return { success: false, message: 'Invalid backup file: missing transactions array.' };
+      if (!data || typeof data !== 'object') {
+        return { success: false, message: 'Invalid backup file: not a JSON object.' };
+      }
+      if (!data.transactions && !data.accounts && !data.categories) {
+        return { success: false, message: 'Invalid backup format: missing financial stores.' };
       }
 
-      if (data.accounts && Array.isArray(data.accounts)) setAccounts(data.accounts);
-      if (data.categories && Array.isArray(data.categories)) setCategories(data.categories);
-      if (data.transactions && Array.isArray(data.transactions)) setTransactions(data.transactions);
-      if (data.borrowings && Array.isArray(data.borrowings)) setBorrowings(data.borrowings);
-      if (data.borrowing_repayments && Array.isArray(data.borrowing_repayments))
-        setBorrowingRepayments(data.borrowing_repayments);
-      if (data.lendings && Array.isArray(data.lendings)) setLendings(data.lendings);
-      if (data.lending_collections && Array.isArray(data.lending_collections))
-        setLendingCollections(data.lending_collections);
-      if (data.office_reimbursements && Array.isArray(data.office_reimbursements))
-        setOfficeReimbursements(data.office_reimbursements);
-      if (data.transfers && Array.isArray(data.transfers)) setTransfers(data.transfers);
+      let addedTxCount = 0;
+      if (data.transactions && Array.isArray(data.transactions)) {
+        setTransactions((prev) => {
+          const existingIds = new Set(prev.map((t) => t.id));
+          const newOnes = data.transactions!.filter((t) => t && t.id && !existingIds.has(t.id));
+          addedTxCount = newOnes.length;
+          return [...newOnes, ...prev];
+        });
+      }
+
+      let addedBorrowingCount = 0;
+      if (data.borrowings && Array.isArray(data.borrowings)) {
+        setBorrowings((prev) => {
+          const existingIds = new Set(prev.map((b) => b.id));
+          const newOnes = data.borrowings!.filter((b) => b && b.id && !existingIds.has(b.id));
+          addedBorrowingCount = newOnes.length;
+          return [...newOnes, ...prev];
+        });
+      }
+
+      let addedLendingCount = 0;
+      if (data.lendings && Array.isArray(data.lendings)) {
+        setLendings((prev) => {
+          const existingIds = new Set(prev.map((l) => l.id));
+          const newOnes = data.lendings!.filter((l) => l && l.id && !existingIds.has(l.id));
+          addedLendingCount = newOnes.length;
+          return [...newOnes, ...prev];
+        });
+      }
+
+      if (data.borrowing_repayments && Array.isArray(data.borrowing_repayments)) {
+        setBorrowingRepayments((prev) => {
+          const existingIds = new Set(prev.map((r) => r.id));
+          const newOnes = data.borrowing_repayments!.filter((r) => r && r.id && !existingIds.has(r.id));
+          return [...newOnes, ...prev];
+        });
+      }
+
+      if (data.lending_collections && Array.isArray(data.lending_collections)) {
+        setLendingCollections((prev) => {
+          const existingIds = new Set(prev.map((c) => c.id));
+          const newOnes = data.lending_collections!.filter((c) => c && c.id && !existingIds.has(c.id));
+          return [...newOnes, ...prev];
+        });
+      }
+
+      if (data.office_reimbursements && Array.isArray(data.office_reimbursements)) {
+        setOfficeReimbursements((prev) => {
+          const existingIds = new Set(prev.map((o) => o.id));
+          const newOnes = data.office_reimbursements!.filter((o) => o && o.id && !existingIds.has(o.id));
+          return [...newOnes, ...prev];
+        });
+      }
+
+      if (data.accounts && Array.isArray(data.accounts)) {
+        setAccounts((prev) => {
+          const existingNames = new Set(prev.map((a) => a.name.toLowerCase()));
+          const newOnes = data.accounts!.filter((a) => a && a.name && !existingNames.has(a.name.toLowerCase()));
+          return [...prev, ...newOnes];
+        });
+      }
+
+      if (data.categories && Array.isArray(data.categories)) {
+        setCategories((prev) => {
+          const existingKeys = new Set(prev.map((c) => `${c.name.toLowerCase()}-${c.type}`));
+          const newOnes = data.categories!.filter((c) => c && c.name && !existingKeys.has(`${c.name.toLowerCase()}-${c.type}`));
+          return [...prev, ...newOnes];
+        });
+      }
 
       return {
         success: true,
-        message: `Successfully imported ${data.transactions.length} transactions and related financial data!`,
+        message: `Safe merge successful: Added ${addedTxCount} new transactions, ${addedBorrowingCount} borrowings, ${addedLendingCount} lendings. All existing records preserved!`,
       };
     } catch (err: any) {
       return { success: false, message: `Failed to import JSON: ${err.message}` };
@@ -1020,41 +1561,32 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     setSyncing(true);
     try {
-      // Upsert accounts
       for (const a of accounts) {
-        await supabase.from('accounts').upsert({ ...a, user_id: user.id });
+        await supabase.from('accounts').upsert(sanitizeForSupabase('accounts', a, user.id));
       }
-      // Upsert categories
       for (const c of categories) {
-        await supabase.from('categories').upsert({ ...c, user_id: user.id });
+        await supabase.from('categories').upsert(sanitizeForSupabase('categories', c, user.id));
       }
-      // Upsert transactions
       for (const t of transactions) {
-        await supabase.from('transactions').upsert({ ...t, user_id: user.id });
+        await supabase.from('transactions').upsert(sanitizeForSupabase('transactions', t, user.id));
       }
-      // Upsert borrowings
       for (const b of borrowings) {
-        await supabase.from('borrowings').upsert({ ...b, user_id: user.id });
+        await supabase.from('borrowings').upsert(sanitizeForSupabase('borrowings', b, user.id));
       }
-      // Upsert repayments
       for (const r of borrowingRepayments) {
-        await supabase.from('borrowing_repayments').upsert({ ...r, user_id: user.id });
+        await supabase.from('borrowing_repayments').upsert(sanitizeForSupabase('borrowing_repayments', r, user.id));
       }
-      // Upsert lendings
       for (const l of lendings) {
-        await supabase.from('lendings').upsert({ ...l, user_id: user.id });
+        await supabase.from('lendings').upsert(sanitizeForSupabase('lendings', l, user.id));
       }
-      // Upsert collections
       for (const col of lendingCollections) {
-        await supabase.from('lending_collections').upsert({ ...col, user_id: user.id });
+        await supabase.from('lending_collections').upsert(sanitizeForSupabase('lending_collections', col, user.id));
       }
-      // Upsert office reimbursements
       for (const off of officeReimbursements) {
-        await supabase.from('office_reimbursements').upsert({ ...off, user_id: user.id });
+        await supabase.from('office_reimbursements').upsert(sanitizeForSupabase('office_reimbursements', off, user.id));
       }
-      // Upsert transfers
       for (const tr of transfers) {
-        await supabase.from('account_transfers').upsert({ ...tr, user_id: user.id });
+        await supabase.from('account_transfers').upsert(sanitizeForSupabase('account_transfers', tr, user.id));
       }
 
       setSyncing(false);
@@ -1092,6 +1624,9 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         summary,
         loading,
         syncing,
+        syncState,
+        pendingSyncCount,
+        syncError,
         addTransaction,
         updateTransaction,
         deleteTransaction,
@@ -1113,6 +1648,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         exportCompleteJSON,
         importJSON,
         syncToSupabase,
+        processPendingOfflineQueue,
         refreshData: loadData,
         clearAllData,
       }}

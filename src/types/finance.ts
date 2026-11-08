@@ -64,6 +64,9 @@ export interface Transaction {
   project_name?: string;
   reimbursement_status?: OfficeReimbursementStatus;
   reimbursed_amount?: number;
+  // Offline & Synchronization metadata
+  sync_status?: 'synced' | 'pending' | 'failed';
+  idempotency_key?: string;
   created_at: string;
   updated_at: string;
 }
@@ -80,6 +83,8 @@ export interface Borrowing {
   notes?: string;
   repaid_amount: number;
   status: 'Unpaid' | 'Partially Repaid' | 'Fully Repaid';
+  sync_status?: 'synced' | 'pending' | 'failed';
+  idempotency_key?: string;
   created_at: string;
   updated_at: string;
 }
@@ -93,6 +98,8 @@ export interface BorrowingRepayment {
   payment_method: PaymentMethod | string;
   account_id?: string;
   notes?: string;
+  sync_status?: 'synced' | 'pending' | 'failed';
+  idempotency_key?: string;
   created_at: string;
 }
 
@@ -108,6 +115,8 @@ export interface Lending {
   notes?: string;
   collected_amount: number;
   status: 'Uncollected' | 'Partially Collected' | 'Fully Collected';
+  sync_status?: 'synced' | 'pending' | 'failed';
+  idempotency_key?: string;
   created_at: string;
   updated_at: string;
 }
@@ -121,6 +130,8 @@ export interface LendingCollection {
   payment_method: PaymentMethod | string;
   account_id?: string;
   notes?: string;
+  sync_status?: 'synced' | 'pending' | 'failed';
+  idempotency_key?: string;
   created_at: string;
 }
 
@@ -133,6 +144,8 @@ export interface OfficeReimbursement {
   payment_method: PaymentMethod | string;
   account_id?: string;
   notes?: string;
+  sync_status?: 'synced' | 'pending' | 'failed';
+  idempotency_key?: string;
   created_at: string;
 }
 
@@ -146,6 +159,8 @@ export interface AccountTransfer {
   to_account_name: string;
   amount: number;
   notes?: string;
+  sync_status?: 'synced' | 'pending' | 'failed';
+  idempotency_key?: string;
   created_at: string;
 }
 

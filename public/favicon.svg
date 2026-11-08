@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="32" height="32" fill="none">
+  <defs>
+    <linearGradient id="favEmerald" x1="10" y1="90" x2="90" y2="10" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#059669" />
+      <stop offset="100%" stop-color="#10b981" />
+    </linearGradient>
+  </defs>
+  <path
+    d="M 14 50 L 30 36 L 30 82 C 30 85.3 27.3 88 24 88 L 20 88 C 16.7 88 14 85.3 14 82 Z"
+    fill="url(#favEmerald)"
+  />
+  <path
+    d="M 42 54 L 58 40 L 58 82 C 58 85.3 55.3 88 52 88 L 48 88 C 44.7 88 42 85.3 42 82 Z"
+    fill="url(#favEmerald)"
+  />
+  <path
+    d="M 70 42 L 86 28 L 86 82 C 86 85.3 83.3 88 80 88 L 76 88 C 72.7 88 70 85.3 70 82 Z"
+    fill="url(#favEmerald)"
+  />
+  <path
+    d="M 14 46 L 34 24 L 51 41 L 76 16 L 67 16 L 67 10 L 92 10 L 92 35 L 86 35 L 86 26 L 51 61 L 34 44 L 14 64 Z"
+    fill="url(#favEmerald)"
+  />
+</svg>

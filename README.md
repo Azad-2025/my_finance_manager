@@ -1,130 +1,118 @@
 # My Finance Manager (আমার ফাইন্যান্স ম্যানেজার)
 
-A complete, production-ready, modern Personal Finance & Expense Management Web Application built with **React 19**, **TypeScript**, **Vite**, **Tailwind CSS v4**, and **Supabase (PostgreSQL Database & Authentication with Row Level Security)**.
+A complete, production-ready, modern Personal Finance & Expense Management Web Application built with **React 19**, **TypeScript**, **Vite**, **Tailwind CSS v4**, **IndexedDB Offline Engine**, and **Supabase (PostgreSQL Database & Authentication with Row Level Security)**.
 
-Primary Currency: **Bangladeshi Taka (BDT / ৳)**  
-Default Timezone: **Asia/Dhaka (GMT+6)**  
-Progressive Web App (PWA): Installable on mobile & desktop with offline cache support.
-
----
-
-## 🌟 Key Features
-
-1. **Executive Financial Dashboard**:
-   - Total Net Balance, Total Income, Personal Expenses, Office Expenses, Total Borrowed, Total Lent, Amount Owed to Me, and Amount I Owe.
-   - Dynamic date filtering: *Today, Yesterday, This Week, This Month, Last Month, All-Time, and Custom Date Range*.
-   - Visual charts powered by Recharts: 6-month cashflow trend, category-wise spending donut chart, personal vs office spending comparison, and liabilities vs receivables bar charts.
-   - All numbers dynamically computed directly from ledger records with zero hardcoding.
-
-2. **Universal Transaction Management**:
-   - Income, Personal Expense, and Office Expense tracking.
-   - Full CRUD operations with modal confirmation dialogs.
-   - Fast client-side searching across descriptions, categories, accounts, and notes.
-   - Filter by date, category, type, and payment method (*Cash, bKash, Nagad, Rocket, Bank Transfer, Cards*).
-   - One-click CSV and Excel-compatible export.
-
-3. **Personal Expenses Module**:
-   - Track daily living, food, commute, utilities, groceries, and healthcare.
-   - Create, edit, and delete custom categories with color tags.
-
-4. **Dedicated Office Expense Management**:
-   - Segregated office-related project expenses.
-   - Fields for project/task name, paid-from account, and office reimbursement status (*Not Submitted, Submitted, Partially Reimbursed, Fully Reimbursed*).
-   - "Clear Claim" action to record partial or full reimbursement payments received from office.
-   - Strict accounting rule: Office reimbursement reduces office receivable balance; never double-counted as new income.
-
-5. **Borrowed Money (Liabilities Management)**:
-   - Tracks debt received from lenders, family, or friends.
-   - Records installment repayments, calculates remaining debt, and maintains complete repayment history logs.
-   - Strict accounting rule: Borrowed money is a liability, NOT income. Repayments reduce debt liability and deduct from account balance.
-
-6. **Lent Money (Receivables Asset Management)**:
-   - Tracks loans given to others.
-   - Records collections, calculates remaining receivables owed to you, and maintains collection logs.
-   - Strict accounting rule: Lent money is a receivable asset, NOT an expense. Collections reduce receivables and credit your account balance.
-
-7. **Income Management**:
-   - Monthly salary, freelancing, business, and gifts.
-   - Avoids double-counting loan collections or office reimbursements.
-
-8. **Multi-Account & Account Transfers**:
-   - Manage Cash Wallet, City Bank, bKash, Nagad, and Rocket accounts.
-   - Transfer funds between own accounts with balance neutrality.
-
-9. **Data Backup & Restore**:
-   - Full JSON archive download and restore with schema validation and confirmation.
-   - Universal and modular CSV exports.
-
-10. **Progressive Web App (PWA)**:
-    - Service Worker offline caching.
-    - Responsive mobile layout with thumb-zone ergonomics and bottom navigation bar.
-    - In-app install banner with Chromium and iOS Safari install guidance.
+- **Primary Currency**: Bangladeshi Taka (BDT / ৳)
+- **Default Timezone**: Asia/Dhaka (GMT+6)
+- **Bilingual Interface**: English (EN) & Bangla (বাংলা)
+- **Progressive Web App (PWA)**: Complete offline support, IndexedDB sync queue, Growth Mark branding, and safe update mechanism.
 
 ---
 
-## 🚀 Getting Started
+## 🌟 Key Upgrades & Highlights
 
-### 1. Prerequisites
-- Node.js 18+ (tested on Node 20 & 22)
-- npm or yarn
+### 1. Growth Mark Brand Identity
+- **Transparent SVG Brand Logo**: Growth Mark icon with ascending arrow crest and 3 pillars in rich emerald gradient (`#059669` to `#10B981`) on deep navy (`#0F172A`).
+- **Complete PWA App Icon System**:
+  - `icon-192x192.png` & `icon-512x512.png` (standard Chromium/Android icons)
+  - `maskable-192x192.png` & `maskable-512x512.png` (safe-zone padded icons for Android squircles)
+  - `apple-touch-icon.png` (180x180 PNG for iOS Safari home screens)
+  - `favicon.ico` & `favicon.svg` (crisp browser tab icons)
+- **Responsive Mobile Visibility**: Logo icon and typography remain balanced and legible across desktop, tablet, and mobile displays without clipping.
 
-### 2. Installation
-```bash
-npm install
-```
+### 2. Professional App Startup Experience
+- Branded launch screen with centered Growth Mark icon and smooth emerald glow animation.
+- Session-guarded (`sessionStorage`) so internal route navigation never unnecessarily replays the startup animation.
+- Fully respects `prefers-reduced-motion` settings.
 
-### 3. Environment Variables Setup
-Copy `.env.example` to `.env`:
-```bash
-cp .env.example .env
-```
+### 3. Durable Offline Functionality with IndexedDB
+- **Structured Offline Storage**: Uses native browser `IndexedDB` (`MyFinanceManagerDB`) for all transactions, borrowings, and lendings.
+- **Client-Generated UUIDs**: Prevents ID collisions when records are created offline (`tx-${timestamp}-${random}`).
+- **Idempotency Keys**: Each record contains a unique idempotency key to prevent accidental duplicate insertions.
+- **Offline Sync Queue**: Maintains an automated background queue tracking record states: `pending`, `syncing`, `synced`, or `failed`.
+- **Automatic Reconnection Sync**: Detects network connectivity changes, drains the queue safely and sequentially into Supabase, and updates local states.
+- **Multi-State Connection UI**:
+  - 🟢 **Online**: Live Supabase synchronization active.
+  - 🟡 **Offline**: Transactions saved locally in IndexedDB; shows pending record counter.
+  - 🔄 **Syncing**: Background synchronization in progress.
+  - ⬆️ **Pending Sync**: Manual "Sync" trigger for queued offline records.
+  - 🔴 **Sync Failed**: Clear alert with "Retry" action.
 
-Configure your Supabase credentials in `.env`:
-```env
-VITE_SUPABASE_URL="https://your-project-ref.supabase.co"
-VITE_SUPABASE_ANON_KEY="your-anon-public-key"
-```
+### 4. Data-Safe PWA Update Mechanism
+- **Permanent Application Identity**: Fixed `id: '/'`, `start_url: '/'`, and `scope: '/'` in Web App Manifest ensures browsers never treat updates as a new app.
+- **Non-Intrusive Prompt**: Detects new service worker versions and displays an "Update Available" banner with **"Update Now"** and **"Later"** options.
+- **Zero Data Loss**: Updating the application preserves IndexedDB and localStorage records. Offline queues and user settings remain 100% intact.
 
-> **Note**: Even without configuring `.env`, the app comes with a built-in **Offline Sandbox / Demo Mode** loaded with realistic Bangladeshi Taka financial seed data. You can test all features immediately and connect your Supabase database anytime via the in-app **Settings** tab.
+---
 
-### 4. Supabase Database Migration
-1. Open your [Supabase Dashboard](https://supabase.com).
+## 📱 How to Install the PWA on Your Phone
+
+### On Android (Chrome / Edge / Samsung Internet):
+1. Open the application in Google Chrome on your phone.
+2. Tap the **Install** button in the top navbar or the **Install App on Phone** card in the **More** drawer.
+3. If prompted by Chrome, tap **Install** to add **My Finance Manager** directly to your home screen.
+4. Launch the app from your home screen for full-screen native experience without browser address bars!
+
+### On iPhone & iPad (iOS Safari):
+1. Open the application in Safari on your iOS device.
+2. Tap the **Share** button (📤 icon in the bottom Safari toolbar).
+3. Scroll down and tap **Add to Home Screen (➕)**.
+4. Tap **Add** in the top right corner.
+5. The Growth Mark app icon will appear on your home screen.
+
+---
+
+## ⚡ Deployment to Vercel
+
+The project is fully pre-configured for seamless Vercel deployment:
+
+1. **Push your code to GitHub**:
+   ```bash
+   git add .
+   git commit -m "feat: upgrade PWA, offline IndexedDB sync, and Growth Mark branding"
+   git push origin main
+   ```
+
+2. **Import into Vercel**:
+   - Go to [vercel.com](https://vercel.com) and click **Add New...** -> **Project**.
+   - Select your GitHub repository.
+   - Vercel automatically detects Vite with:
+     - **Build Command**: `npm run build`
+     - **Output Directory**: `dist`
+   - Under **Environment Variables**, add:
+     - `VITE_SUPABASE_URL`: Your Supabase Project URL
+     - `VITE_SUPABASE_ANON_KEY`: Your Supabase Public Anon Key
+   - Click **Deploy**.
+
+3. **SPA Routing & Caching**:
+   `vercel.json` contains single-page app rewrite rules (`/(.*) -> /index.html`) so refreshing routes never returns 404, along with optimized Cache-Control headers for the service worker (`sw.js`) and manifest.
+
+---
+
+## 🗄️ Supabase PostgreSQL Setup (Optional Cloud Sync)
+
+The application functions completely offline or in local mode without Supabase. To enable multi-device cloud synchronization:
+
+1. Create a free project at [supabase.com](https://supabase.com).
 2. Go to **SQL Editor** -> **New query**.
-3. Copy the migration SQL from `supabase/schema.sql` (or click **Copy SQL** in the in-app **Settings** tab) and click **Run**.
-4. The migration provisions all 10 tables, triggers, and Row Level Security (RLS) policies so authenticated users can only access their own records.
+3. Copy the migration SQL from `supabase/schema.sql` and click **Run**.
+4. Copy your project URL and public anon key from **Project Settings** -> **API**.
+5. In **My Finance Manager**, navigate to **Settings** -> **Supabase Configuration** and paste your credentials, or define them in `.env`.
 
-### 5. Running Locally
+---
+
+## 🛠️ Local Development
+
 ```bash
+# 1. Install dependencies
+npm install
+
+# 2. Run local dev server (port 3000)
 npm run dev
-```
-Open your browser at `http://localhost:3000`.
 
-### 6. Production Build
-```bash
+# 3. Build for production & verify PWA bundle
 npm run build
 ```
-
----
-
-## 📁 Database Architecture
-
-The PostgreSQL schema consists of 10 normalized tables with Row Level Security (RLS):
-- `profiles`: User preferences (currency, timezone, theme).
-- `accounts`: Financial accounts (Cash Wallet, Bank Account, bKash, Nagad, etc.).
-- `categories`: Expense & income categories with custom colors.
-- `transactions`: Central ledger for income, personal expenses, and office expenses.
-- `borrowings`: Borrowed loans (liabilities).
-- `borrowing_repayments`: Installment payments made against borrowed loans.
-- `lendings`: Money lent to others (receivable assets).
-- `lending_collections`: Repayments collected from borrowers.
-- `office_reimbursements`: Reimbursements cleared by employer.
-- `account_transfers`: Balance-neutral transfers between own accounts.
-
----
-
-## 📱 PWA Mobile Installation
-- **Android / Chromium**: Click the **Install App** button in the top navbar or browser prompt.
-- **iPhone / iPad (iOS Safari)**: Tap the **Share** button in Safari bottom bar -> tap **Add to Home Screen**.
 
 ---
 

@@ -224,9 +224,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const handleUpdateProfile = (e: React.FormEvent) => {
     e.preventDefault();
     updateProfile({
-      name: profileName.trim() || 'Muhammad Salah Uddin',
-      phone: profilePhone.trim() || '01305430838',
-      email: profileEmail.trim() || 'azadtn56@gmail.com',
+      name: profileName.trim() || userProfile.name || 'Account Owner',
+      phone: profilePhone.trim() || userProfile.phone || '',
+      email: profileEmail.trim() || userProfile.email || '',
     });
     setProfileSaved(true);
     setStatusMsg({ type: 'success', text: 'Personal profile updated successfully!' });
@@ -384,7 +384,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   required
                   value={profilePhone}
                   onChange={(e) => setProfilePhone(e.target.value)}
-                  placeholder="01305430838"
+                  placeholder="01XXXXXXXXX"
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-mono font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
@@ -401,7 +401,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 type="email"
                 value={profileEmail}
                 onChange={(e) => setProfileEmail(e.target.value)}
-                placeholder="azadtn56@gmail.com"
+                placeholder="user@example.com"
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>

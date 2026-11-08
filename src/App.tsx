@@ -11,6 +11,8 @@ import { Navbar } from './components/layout/Navbar';
 import { Sidebar, NavView } from './components/layout/Sidebar';
 import { BottomNav } from './components/layout/BottomNav';
 import { OfflineIndicator } from './components/common/OfflineIndicator';
+import { SplashScreen } from './components/common/SplashScreen';
+import { PWAUpdatePrompt } from './components/common/PWAUpdatePrompt';
 
 // Modals
 import { TransactionModal } from './components/modals/TransactionModal';
@@ -262,7 +264,13 @@ function MainLayout() {
         onOpenAddLending={() => setLendingModalOpen(true)}
       />
 
-      {/* Offline Status Toast */}
+      {/* App Launch Splash Screen (plays on initial app load, session guarded) */}
+      <SplashScreen />
+
+      {/* Safe PWA Update Prompt (non-intrusive notification) */}
+      <PWAUpdatePrompt />
+
+      {/* Offline Status & Sync Queue Toast */}
       <OfflineIndicator />
 
       {/* Modals Container */}
