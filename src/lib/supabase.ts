@@ -9,6 +9,8 @@ import {
   LendingCollection,
   OfficeReimbursement,
   AccountTransfer,
+  SalaryAdvance,
+  SalaryAdjustment,
 } from '../types/finance';
 
 // Storage keys
@@ -195,6 +197,8 @@ export const DEFAULT_LENDINGS: Lending[] = [];
 export const DEFAULT_LENDING_COLLECTIONS: LendingCollection[] = [];
 export const DEFAULT_OFFICE_REIMBURSEMENTS: OfficeReimbursement[] = [];
 export const DEFAULT_TRANSFERS: AccountTransfer[] = [];
+export const DEFAULT_SALARY_ADVANCES: SalaryAdvance[] = [];
+export const DEFAULT_SALARY_ADJUSTMENTS: SalaryAdjustment[] = [];
 
 // Local store interface
 export interface FinanceDatabaseState {
@@ -207,17 +211,20 @@ export interface FinanceDatabaseState {
   lending_collections: LendingCollection[];
   office_reimbursements: OfficeReimbursement[];
   transfers: AccountTransfer[];
+  salary_advances?: SalaryAdvance[];
+  salary_adjustments?: SalaryAdjustment[];
 }
 
 export function loadLocalData(): FinanceDatabaseState {
   try {
     // Clean up legacy v1 mock store if present
     localStorage.removeItem('my_finance_offline_store_v1');
-
     const raw = localStorage.getItem(LOCAL_DATA_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed.transactions && parsed.accounts) {
+        if (!parsed.salary_advances) parsed.salary_advances = [];
+        if (!parsed.salary_adjustments) parsed.salary_adjustments = [];
         return parsed;
       }
     }
@@ -236,6 +243,8 @@ export function loadLocalData(): FinanceDatabaseState {
     lending_collections: DEFAULT_LENDING_COLLECTIONS,
     office_reimbursements: DEFAULT_OFFICE_REIMBURSEMENTS,
     transfers: DEFAULT_TRANSFERS,
+    salary_advances: DEFAULT_SALARY_ADVANCES,
+    salary_adjustments: DEFAULT_SALARY_ADJUSTMENTS,
   };
   saveLocalData(initial);
   return initial;
@@ -260,6 +269,8 @@ export function resetAllDataToClean(): FinanceDatabaseState {
     lending_collections: [],
     office_reimbursements: [],
     transfers: [],
+    salary_advances: [],
+    salary_adjustments: [],
   };
   saveLocalData(clean);
   return clean;

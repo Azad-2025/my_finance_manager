@@ -250,3 +250,43 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- ============================================================================
+-- SALARY ADVANCES & SALARY ADJUSTMENTS (Additive & Non-destructive)
+-- ============================================================================
+create table if not exists public.salary_advances (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  amount numeric(14, 2) not null check (amount > 0),
+  date date not null default current_date,
+  purpose text not null,
+  received_from text default 'Office Manager',
+  payment_method text default 'Cash',
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.salary_advances enable row level security;
+
+create policy "Users can manage their own salary advances"
+  on public.salary_advances for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create table if not exists public.salary_adjustments (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  salary_month text not null,
+  adjustment_date date not null default current_date,
+  amount numeric(14, 2) not null check (amount > 0),
+  notes text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.salary_adjustments enable row level security;
+
+create policy "Users can manage their own salary adjustments"
+  on public.salary_adjustments for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+

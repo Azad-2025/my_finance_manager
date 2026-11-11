@@ -12,6 +12,9 @@ import {
   FinancialSummary,
   OfficeReimbursementStatus,
   PaymentMethod,
+  SalaryAdvance,
+  SalaryAdjustment,
+  SalaryAdvanceSummary,
 } from '../types/finance';
 import {
   getSupabase,
@@ -245,6 +248,16 @@ interface FinanceContextType {
   updateCategory: (cat: Category) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
 
+  // Salary Advance operations
+  salaryAdvances: SalaryAdvance[];
+  salaryAdjustments: SalaryAdjustment[];
+  salaryAdvanceSummary: SalaryAdvanceSummary;
+  addSalaryAdvance: (data: Omit<SalaryAdvance, 'id' | 'created_at' | 'updated_at'>) => Promise<SalaryAdvance>;
+  updateSalaryAdvance: (adv: SalaryAdvance) => Promise<void>;
+  deleteSalaryAdvance: (id: string) => Promise<void>;
+  recordSalaryAdjustment: (adj: Omit<SalaryAdjustment, 'id' | 'created_at'>) => Promise<SalaryAdjustment>;
+  deleteSalaryAdjustment: (id: string) => Promise<void>;
+
   // Import / Export & Sync
   exportToCSV: (type?: 'all' | 'transactions' | 'personal' | 'office' | 'income' | 'borrowings' | 'lendings') => void;
   exportCompleteJSON: () => string;
@@ -274,6 +287,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [lendingCollections, setLendingCollections] = useState<LendingCollection[]>([]);
   const [officeReimbursements, setOfficeReimbursements] = useState<OfficeReimbursement[]>([]);
   const [transfers, setTransfers] = useState<AccountTransfer[]>([]);
+  const [salaryAdvances, setSalaryAdvances] = useState<SalaryAdvance[]>([]);
+  const [salaryAdjustments, setSalaryAdjustments] = useState<SalaryAdjustment[]>([]);
 
   // Connectivity tracking
   useEffect(() => {
@@ -323,6 +338,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setLendingCollections(cached.lending_collections || []);
         setOfficeReimbursements(cached.office_reimbursements || []);
         setTransfers(cached.transfers || []);
+        setSalaryAdvances(cached.salary_advances || []);
+        setSalaryAdjustments(cached.salary_adjustments || []);
         initialLoaded = true;
       }
     } catch (e) {
@@ -340,6 +357,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setLendingCollections(local.lending_collections || []);
       setOfficeReimbursements(local.office_reimbursements || []);
       setTransfers(local.transfers || []);
+      setSalaryAdvances(local.salary_advances || []);
+      setSalaryAdjustments(local.salary_adjustments || []);
     }
 
     await refreshPendingCount();
@@ -404,6 +423,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         lending_collections: lendingCollections,
         office_reimbursements: officeReimbursements,
         transfers,
+        salary_advances: salaryAdvances,
+        salary_adjustments: salaryAdjustments,
       };
 
       saveLocalData(stateToPersist);
@@ -419,6 +440,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     lendingCollections,
     officeReimbursements,
     transfers,
+    salaryAdvances,
+    salaryAdjustments,
     loading,
   ]);
 
@@ -571,6 +594,30 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       monthExpenses,
     };
   }, [accounts, transactions, borrowings, lendings]);
+
+  // =========================================================================
+  // SALARY ADVANCE & ADJUSTMENT SUMMARY (Isolated from income & office expense)
+  // =========================================================================
+  const salaryAdvanceSummary = useMemo<SalaryAdvanceSummary>(() => {
+    let totalAdvanceReceived = 0;
+    let totalSalaryAdjusted = 0;
+
+    salaryAdvances.forEach((adv) => {
+      totalAdvanceReceived += Number(adv.amount || 0);
+    });
+
+    salaryAdjustments.forEach((adj) => {
+      totalSalaryAdjusted += Number(adj.amount || 0);
+    });
+
+    const outstandingAdvance = Math.max(0, totalAdvanceReceived - totalSalaryAdjusted);
+
+    return {
+      totalAdvanceReceived,
+      totalSalaryAdjusted,
+      outstandingAdvance,
+    };
+  }, [salaryAdvances, salaryAdjustments]);
 
   // =========================================================================
   // TRANSACTION OPERATIONS (Client UUID + Idempotency + Offline Queue)
@@ -1365,6 +1412,137 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   // =========================================================================
+  // SALARY ADVANCE & ADJUSTMENT OPERATIONS
+  // =========================================================================
+  const addSalaryAdvance = async (
+    data: Omit<SalaryAdvance, 'id' | 'created_at' | 'updated_at'>
+  ): Promise<SalaryAdvance> => {
+    const id = generateUUID();
+    const nowStr = new Date().toISOString();
+    const newAdv: SalaryAdvance = {
+      ...data,
+      id,
+      amount: Number(data.amount),
+      created_at: nowStr,
+      updated_at: nowStr,
+      sync_status: 'synced',
+    };
+    setSalaryAdvances((prev) => [newAdv, ...prev]);
+
+    const supabase = getSupabase();
+    if (navigator.onLine && supabase && user) {
+      try {
+        await supabase.from('salary_advances').insert({
+          id: newAdv.id,
+          user_id: user.id,
+          amount: newAdv.amount,
+          date: newAdv.date,
+          purpose: newAdv.purpose,
+          received_from: newAdv.received_from,
+          payment_method: newAdv.payment_method,
+          created_at: newAdv.created_at,
+          updated_at: newAdv.updated_at,
+        });
+      } catch (err) {
+        console.debug('Supabase salary_advances insert fallback to local:', err);
+      }
+    }
+
+    return newAdv;
+  };
+
+  const updateSalaryAdvance = async (adv: SalaryAdvance): Promise<void> => {
+    const nowStr = new Date().toISOString();
+    const updated: SalaryAdvance = {
+      ...adv,
+      amount: Number(adv.amount),
+      updated_at: nowStr,
+    };
+    setSalaryAdvances((prev) =>
+      prev.map((item) => (item.id === adv.id ? updated : item))
+    );
+
+    const supabase = getSupabase();
+    if (navigator.onLine && supabase && user && isValidUUID(adv.id)) {
+      try {
+        await supabase
+          .from('salary_advances')
+          .update({
+            amount: updated.amount,
+            date: updated.date,
+            purpose: updated.purpose,
+            received_from: updated.received_from,
+            payment_method: updated.payment_method,
+            updated_at: nowStr,
+          })
+          .eq('id', adv.id);
+      } catch (err) {
+        console.debug('Supabase salary_advances update fallback to local:', err);
+      }
+    }
+  };
+
+  const deleteSalaryAdvance = async (id: string): Promise<void> => {
+    setSalaryAdvances((prev) => prev.filter((item) => item.id !== id));
+
+    const supabase = getSupabase();
+    if (navigator.onLine && supabase && user && isValidUUID(id)) {
+      try {
+        await supabase.from('salary_advances').delete().eq('id', id);
+      } catch (err) {
+        console.debug('Supabase salary_advances delete fallback to local:', err);
+      }
+    }
+  };
+
+  const recordSalaryAdjustment = async (
+    adj: Omit<SalaryAdjustment, 'id' | 'created_at'>
+  ): Promise<SalaryAdjustment> => {
+    const id = generateUUID();
+    const nowStr = new Date().toISOString();
+    const newAdj: SalaryAdjustment = {
+      ...adj,
+      id,
+      amount: Number(adj.amount),
+      created_at: nowStr,
+      sync_status: 'synced',
+    };
+    setSalaryAdjustments((prev) => [newAdj, ...prev]);
+
+    const supabase = getSupabase();
+    if (navigator.onLine && supabase && user) {
+      try {
+        await supabase.from('salary_adjustments').insert({
+          id: newAdj.id,
+          user_id: user.id,
+          salary_month: newAdj.salary_month,
+          adjustment_date: newAdj.adjustment_date,
+          amount: newAdj.amount,
+          notes: newAdj.notes,
+          created_at: newAdj.created_at,
+        });
+      } catch (err) {
+        console.debug('Supabase salary_adjustments insert fallback to local:', err);
+      }
+    }
+
+    return newAdj;
+  };
+
+  const deleteSalaryAdjustment = async (id: string): Promise<void> => {
+    setSalaryAdjustments((prev) => prev.filter((item) => item.id !== id));
+
+    const supabase = getSupabase();
+    if (navigator.onLine && supabase && user && isValidUUID(id)) {
+      try {
+        await supabase.from('salary_adjustments').delete().eq('id', id);
+      } catch (err) {
+        console.debug('Supabase salary_adjustments delete fallback to local:', err);
+      }
+    }
+  };
+
+  // =========================================================================
   // EXPORT & IMPORT UTILITIES
   // =========================================================================
   const exportToCSV = (type: 'all' | 'transactions' | 'personal' | 'office' | 'income' | 'borrowings' | 'lendings' = 'all') => {
@@ -1456,6 +1634,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       lending_collections: lendingCollections,
       office_reimbursements: officeReimbursements,
       transfers,
+      salary_advances: salaryAdvances,
+      salary_adjustments: salaryAdjustments,
     };
     return JSON.stringify(backup, null, 2);
   };
@@ -1524,6 +1704,22 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setOfficeReimbursements((prev) => {
           const existingIds = new Set(prev.map((o) => o.id));
           const newOnes = data.office_reimbursements!.filter((o) => o && o.id && !existingIds.has(o.id));
+          return [...newOnes, ...prev];
+        });
+      }
+
+      if (data.salary_advances && Array.isArray(data.salary_advances)) {
+        setSalaryAdvances((prev) => {
+          const existingIds = new Set(prev.map((s) => s.id));
+          const newOnes = data.salary_advances!.filter((s) => s && s.id && !existingIds.has(s.id));
+          return [...newOnes, ...prev];
+        });
+      }
+
+      if (data.salary_adjustments && Array.isArray(data.salary_adjustments)) {
+        setSalaryAdjustments((prev) => {
+          const existingIds = new Set(prev.map((a) => a.id));
+          const newOnes = data.salary_adjustments!.filter((a) => a && a.id && !existingIds.has(a.id));
           return [...newOnes, ...prev];
         });
       }
@@ -1605,6 +1801,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setLendingCollections([]);
     setOfficeReimbursements([]);
     setTransfers([]);
+    setSalaryAdvances([]);
+    setSalaryAdjustments([]);
     setAccounts(DEFAULT_ACCOUNTS);
     resetAllDataToClean();
   };
@@ -1627,6 +1825,14 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         syncState,
         pendingSyncCount,
         syncError,
+        salaryAdvances,
+        salaryAdjustments,
+        salaryAdvanceSummary,
+        addSalaryAdvance,
+        updateSalaryAdvance,
+        deleteSalaryAdvance,
+        recordSalaryAdjustment,
+        deleteSalaryAdjustment,
         addTransaction,
         updateTransaction,
         deleteTransaction,

@@ -182,3 +182,36 @@ export interface FinancialSummary {
   weekExpenses: number;
   monthExpenses: number;
 }
+
+export interface SalaryAdvance {
+  id: string;
+  user_id?: string;
+  amount: number;
+  date: string; // YYYY-MM-DD
+  purpose: string;
+  received_from: string; // e.g. "Office Manager", "HR", "Company"
+  payment_method: string; // "Cash", "Bank", "bKash", "Nagad", etc.
+  created_at: string;
+  updated_at?: string;
+  sync_status?: 'synced' | 'pending' | 'failed';
+  idempotency_key?: string;
+}
+
+export interface SalaryAdjustment {
+  id: string;
+  user_id?: string;
+  salary_month: string; // e.g. "2026-11" or "November 2026"
+  adjustment_date: string; // YYYY-MM-DD
+  amount: number;
+  notes?: string;
+  created_at: string;
+  sync_status?: 'synced' | 'pending' | 'failed';
+  idempotency_key?: string;
+}
+
+export interface SalaryAdvanceSummary {
+  totalAdvanceReceived: number;
+  totalSalaryAdjusted: number;
+  outstandingAdvance: number;
+}
+

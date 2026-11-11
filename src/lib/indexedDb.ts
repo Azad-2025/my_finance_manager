@@ -19,7 +19,9 @@ export interface OfflineQueueItem {
     | 'reimbursement'
     | 'account'
     | 'category'
-    | 'transfer';
+    | 'transfer'
+    | 'salary_advance'
+    | 'salary_adjustment';
   action: 'insert' | 'update' | 'delete';
   record_id: string;
   payload: any;
