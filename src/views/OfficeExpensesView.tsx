@@ -24,7 +24,7 @@ import { useFinance } from '../context/FinanceContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Transaction, SalaryAdvance, SalaryAdjustment } from '../types/finance';
 import { formatBDT, formatDate } from '../utils/formatters';
-import { exportOfficeExpensesToPDF } from '../utils/pdfExport';
+import { exportOfficeExpensesToPDF, exportSalaryAdvanceStatementToPDF } from '../utils/pdfExport';
 
 interface OfficeExpensesViewProps {
   onOpenAddOfficeExpense: () => void;
@@ -196,6 +196,20 @@ export const OfficeExpensesView: React.FC<OfficeExpensesViewProps> = ({
       totalReimbursed,
       pendingReimbursement,
     });
+  };
+
+  // Handler for Salary Advance Statement PDF Export
+  const handleExportSalaryAdvancePDF = () => {
+    exportSalaryAdvanceStatementToPDF(
+      salaryAdvances,
+      salaryAdjustments,
+      {
+        totalAdvanceReceived: salaryAdvanceSummary.totalAdvanceReceived,
+        totalSalaryAdjusted: salaryAdvanceSummary.totalSalaryAdjusted,
+        outstandingAdvance: salaryAdvanceSummary.outstandingAdvance,
+        salaryMonthFilter,
+      }
+    );
   };
 
   // Salary advance handlers
@@ -642,6 +656,15 @@ export const OfficeExpensesView: React.FC<OfficeExpensesViewProps> = ({
               </p>
             </div>
             <div className="flex items-center gap-2 self-stretch sm:self-auto flex-wrap">
+              <button
+                type="button"
+                onClick={handleExportSalaryAdvancePDF}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 transition active:scale-95 shadow-xs"
+                title={isBn ? 'অগ্রিম বেতনের পিডিএফ স্টেটমেন্ট ডাউনলোড করুন' : 'Download clean PDF statement'}
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>{isBn ? 'এক্সপোর্ট (PDF)' : 'Export (PDF)'}</span>
+              </button>
               <button
                 type="button"
                 onClick={handleOpenAdjustSalary}
