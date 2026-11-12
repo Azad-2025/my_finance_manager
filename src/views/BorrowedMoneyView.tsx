@@ -147,8 +147,8 @@ export const BorrowedMoneyView: React.FC<BorrowedMoneyViewProps> = ({
             <HandCoins className="w-5 h-5 text-orange-600 dark:text-orange-400" />
             <span>
               {isBn
-                ? 'ধার নেওয়া টাকা ও পরিশোধ (যে টাকা আমি ধার নিয়েছি বা পরিশোধ করেছি)'
-                : 'Money Borrowed & Repaid (Liabilities Hub)'}
+                ? 'ধার নেওয়া টাকার হিসাব'
+                : 'Money Borrowed'}
             </span>
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
