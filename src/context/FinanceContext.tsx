@@ -211,6 +211,7 @@ interface FinanceContextType {
     accountId?: string,
     notes?: string
   ) => Promise<void>;
+  deleteBorrowingRepayment: (repaymentId: string) => Promise<void>;
   deleteBorrowing: (id: string) => Promise<void>;
 
   // Lending operations
@@ -970,6 +971,68 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         await supabase.from('borrowings').update(sanitized).eq('id', b.id);
       } catch (err) {
         console.debug('Borrowing update fallback:', err);
+      }
+    }
+  };
+
+  const deleteBorrowingRepayment = async (repaymentId: string) => {
+    const repayment = borrowingRepayments.find((r) => r.id === repaymentId);
+    if (!repayment) return;
+
+    const borrowing = borrowings.find((b) => b.id === repayment.borrowing_id);
+    const nowStr = new Date().toISOString();
+
+    setBorrowingRepayments((prev) => prev.filter((r) => r.id !== repaymentId));
+
+    if (borrowing) {
+      const newRepaid = Math.max(0, Number(borrowing.repaid_amount || 0) - Number(repayment.amount || 0));
+      const newStatus: Borrowing['status'] =
+        newRepaid >= borrowing.amount ? 'Fully Repaid' : newRepaid > 0 ? 'Partially Repaid' : 'Unpaid';
+
+      setBorrowings((prev) =>
+        prev.map((b) =>
+          b.id === borrowing.id
+            ? { ...b, repaid_amount: newRepaid, status: newStatus, updated_at: nowStr }
+            : b
+        )
+      );
+
+      const supabase = getSupabase();
+      if (navigator.onLine && supabase && user && isValidUUID(borrowing.id)) {
+        try {
+          await supabase
+            .from('borrowings')
+            .update({ repaid_amount: newRepaid, status: newStatus, updated_at: nowStr })
+            .eq('id', borrowing.id);
+        } catch (e) {
+          console.debug('Failed updating borrowing after repayment delete:', e);
+        }
+      }
+    }
+
+    if (repayment.account_id) {
+      setAccounts((prev) =>
+        prev.map((acc) =>
+          acc.id === repayment.account_id
+            ? { ...acc, balance: acc.balance + repayment.amount, updated_at: nowStr }
+            : acc
+        )
+      );
+    }
+
+    const supabase = getSupabase();
+    if (navigator.onLine && supabase && user && isValidUUID(repaymentId)) {
+      try {
+        await supabase.from('borrowing_repayments').delete().eq('id', repaymentId);
+      } catch {
+        await enqueueSyncItem({
+          idempotency_key: generateIdempotencyKey('rep_del', repaymentId),
+          entity_type: 'repayment',
+          action: 'delete',
+          record_id: repaymentId,
+          payload: { id: repaymentId },
+          status: 'pending',
+        });
       }
     }
   };
@@ -1897,6 +1960,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         addBorrowing,
         updateBorrowing,
         recordBorrowingRepayment,
+        deleteBorrowingRepayment,
         deleteBorrowing,
         addLending,
         updateLending,

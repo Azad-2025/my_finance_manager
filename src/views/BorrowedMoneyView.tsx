@@ -444,11 +444,16 @@ export const BorrowedMoneyView: React.FC<BorrowedMoneyViewProps> = ({
               {/* Record Right: Amount and Actions */}
               <div className="flex items-center justify-between md:justify-end gap-3 shrink-0 pt-3 md:pt-0 border-t md:border-t-0 border-slate-100 dark:border-slate-800">
                 <div className="text-left md:text-right">
-                  <div className="text-lg font-bold font-mono tabular-nums text-slate-900 dark:text-white">
-                    {formatBDT(b.amount)}
+                  <div className={`text-lg font-bold font-mono tabular-nums ${
+                    remaining > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'
+                  }`}>
+                    {formatBDT(remaining)}
                   </div>
-                  <div className="text-[10px] text-slate-400 uppercase tracking-wider">
-                    {isBn ? 'মোট ধার নেওয়া' : 'Principal Borrowed'}
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
+                    {remaining > 0 ? (isBn ? 'বাকি দেনা' : 'Remaining Debt') : (isBn ? 'পরিশোধিত' : 'Fully Cleared')}
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                    {isBn ? 'মূল ধার:' : 'Principal:'} {formatBDT(b.amount)}
                   </div>
                 </div>
 
