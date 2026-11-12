@@ -77,10 +77,12 @@ function MainLayout() {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
   const [borrowingModalOpen, setBorrowingModalOpen] = useState(false);
+  const [editingBorrowing, setEditingBorrowing] = useState<Borrowing | null>(null);
   const [repaymentModalOpen, setRepaymentModalOpen] = useState(false);
   const [activeBorrowingForRepayment, setActiveBorrowingForRepayment] = useState<Borrowing | null>(null);
 
   const [lendingModalOpen, setLendingModalOpen] = useState(false);
+  const [editingLending, setEditingLending] = useState<Lending | null>(null);
   const [collectionModalOpen, setCollectionModalOpen] = useState(false);
   const [activeLendingForCollection, setActiveLendingForCollection] = useState<Lending | null>(null);
 
@@ -126,6 +128,26 @@ function MainLayout() {
     setEditingTransaction(tx);
     setTransactionModalType(tx.type);
     setTransactionModalOpen(true);
+  };
+
+  const handleOpenAddBorrowing = () => {
+    setEditingBorrowing(null);
+    setBorrowingModalOpen(true);
+  };
+
+  const handleEditBorrowing = (b: Borrowing) => {
+    setEditingBorrowing(b);
+    setBorrowingModalOpen(true);
+  };
+
+  const handleOpenAddLending = () => {
+    setEditingLending(null);
+    setLendingModalOpen(true);
+  };
+
+  const handleEditLending = (l: Lending) => {
+    setEditingLending(l);
+    setLendingModalOpen(true);
   };
 
   const handleOpenRepaymentModal = (borrowing: Borrowing) => {
@@ -212,24 +234,28 @@ function MainLayout() {
 
           {currentView === 'loans' && (
             <LoansView
-              onOpenAddBorrowing={() => setBorrowingModalOpen(true)}
+              onOpenAddBorrowing={handleOpenAddBorrowing}
               onOpenRepaymentModal={handleOpenRepaymentModal}
-              onOpenAddLending={() => setLendingModalOpen(true)}
+              onOpenAddLending={handleOpenAddLending}
               onOpenCollectionModal={handleOpenCollectionModal}
+              onEditBorrowing={handleEditBorrowing}
+              onEditLending={handleEditLending}
             />
           )}
 
           {currentView === 'borrowed' && (
             <BorrowedMoneyView
-              onOpenAddBorrowing={() => setBorrowingModalOpen(true)}
+              onOpenAddBorrowing={handleOpenAddBorrowing}
               onOpenRepaymentModal={handleOpenRepaymentModal}
+              onEditBorrowing={handleEditBorrowing}
             />
           )}
 
           {currentView === 'lent' && (
             <LentMoneyView
-              onOpenAddLending={() => setLendingModalOpen(true)}
+              onOpenAddLending={handleOpenAddLending}
               onOpenCollectionModal={handleOpenCollectionModal}
+              onEditLending={handleEditLending}
             />
           )}
 
@@ -260,8 +286,8 @@ function MainLayout() {
         onOpenAddIncome={() => handleOpenAddTransaction('income')}
         onOpenAddExpense={() => handleOpenAddTransaction('personal_expense')}
         onOpenAddOfficeExpense={() => handleOpenAddTransaction('office_expense')}
-        onOpenAddBorrowing={() => setBorrowingModalOpen(true)}
-        onOpenAddLending={() => setLendingModalOpen(true)}
+        onOpenAddBorrowing={handleOpenAddBorrowing}
+        onOpenAddLending={handleOpenAddLending}
       />
 
       {/* App Launch Splash Screen (plays on initial app load, session guarded) */}
@@ -283,7 +309,11 @@ function MainLayout() {
 
       <BorrowingModal
         isOpen={borrowingModalOpen}
-        onClose={() => setBorrowingModalOpen(false)}
+        onClose={() => {
+          setBorrowingModalOpen(false);
+          setEditingBorrowing(null);
+        }}
+        editingBorrowing={editingBorrowing}
       />
 
       <RepaymentModal
@@ -297,7 +327,11 @@ function MainLayout() {
 
       <LendingModal
         isOpen={lendingModalOpen}
-        onClose={() => setLendingModalOpen(false)}
+        onClose={() => {
+          setLendingModalOpen(false);
+          setEditingLending(null);
+        }}
+        editingLending={editingLending}
       />
 
       <CollectionModal

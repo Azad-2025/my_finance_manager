@@ -12,6 +12,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { useFinance } from '../context/FinanceContext';
+import { useLanguage } from '../context/LanguageContext';
 import { Category, Account } from '../types/finance';
 import { formatBDT, formatDate } from '../utils/formatters';
 
@@ -33,6 +34,8 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
     deleteCategory,
     deleteAccount,
   } = useFinance();
+  const { language } = useLanguage();
+  const isBn = language === 'bn';
 
   const [activeCategoryTab, setActiveCategoryTab] = useState<'personal' | 'office' | 'income'>('personal');
 
@@ -48,10 +51,12 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
           <div>
             <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <Wallet className="w-5 h-5 text-emerald-500" />
-              <span>Accounts & Wallets</span>
+              <span>{isBn ? 'অ্যাকাউন্ট ও ওয়ালেট' : 'Accounts & Wallets'}</span>
             </h2>
             <p className="text-xs text-slate-500">
-              Manage Cash, Bank accounts, bKash, Nagad, and execute account transfers
+              {isBn
+                ? 'নগদ ক্যাশ, ব্যাংক অ্যাকাউন্ট, বিকাশ, নগদ পরিচালনা ও অ্যাকাউন্ট স্থানান্তর'
+                : 'Manage Cash, Bank accounts, bKash, Nagad, and execute account transfers'}
             </p>
           </div>
 
@@ -61,14 +66,14 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 transition"
             >
               <ArrowRightLeft className="w-3.5 h-3.5 text-blue-500" />
-              <span>Transfer Funds</span>
+              <span>{isBn ? 'অর্থ স্থানান্তর' : 'Transfer Funds'}</span>
             </button>
             <button
               onClick={() => onOpenAccountModal()}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition"
             >
               <Plus className="w-4 h-4" />
-              <span>Add Account</span>
+              <span>{isBn ? '+ অ্যাকাউন্ট যোগ করুন' : 'Add Account'}</span>
             </button>
           </div>
         </div>
@@ -114,7 +119,9 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
               </div>
 
               <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <span className="text-[10px] text-slate-400">Available Balance</span>
+                <span className="text-[10px] text-slate-400">
+                  {isBn ? 'উপলব্ধ ব্যালেন্স' : 'Available Balance'}
+                </span>
                 <div className="text-xl font-bold font-mono tabular-nums text-emerald-600 dark:text-emerald-400 mt-0.5">
                   {formatBDT(acc.balance)}
                 </div>
@@ -128,7 +135,7 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
           <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 space-y-2">
             <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
               <ArrowRightLeft className="w-3.5 h-3.5 text-blue-500" />
-              <span>Recent Account-to-Account Transfers</span>
+              <span>{isBn ? 'সাম্প্রতিক অ্যাকাউন্ট-টু-অ্যাকাউন্ট স্থানান্তর' : 'Recent Account-to-Account Transfers'}</span>
             </h4>
             <div className="divide-y divide-slate-200 dark:divide-slate-800">
               {transfers.slice(0, 3).map((tr) => (
@@ -155,10 +162,12 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
           <div>
             <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <Tags className="w-5 h-5 text-indigo-500" />
-              <span>Expense & Income Categories</span>
+              <span>{isBn ? 'ব্যয় ও আয়ের ক্যাটাগরি' : 'Expense & Income Categories'}</span>
             </h2>
             <p className="text-xs text-slate-500">
-              Personalize spending and revenue classifications
+              {isBn
+                ? 'ব্যক্তিগত ব্যয় ও আয়ের শ্রেণিবিভাগ কাস্টমাইজ করুন'
+                : 'Personalize spending and revenue classifications'}
             </p>
           </div>
 
@@ -176,7 +185,7 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition"
           >
             <Plus className="w-4 h-4" />
-            <span>New Custom Category</span>
+            <span>{isBn ? '+ নতুন ক্যাটাগরি' : 'New Custom Category'}</span>
           </button>
         </div>
 
@@ -191,7 +200,7 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
             }`}
           >
             <ShoppingBag className="w-3.5 h-3.5" />
-            <span>Personal ({personalCategories.length})</span>
+            <span>{isBn ? 'ব্যক্তিগত' : 'Personal'} ({personalCategories.length})</span>
           </button>
           <button
             onClick={() => setActiveCategoryTab('office')}
@@ -202,7 +211,7 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
             }`}
           >
             <Building2 className="w-3.5 h-3.5" />
-            <span>Office ({officeCategories.length})</span>
+            <span>{isBn ? 'অফিস' : 'Office'} ({officeCategories.length})</span>
           </button>
           <button
             onClick={() => setActiveCategoryTab('income')}
@@ -213,7 +222,7 @@ export const CategoriesView: React.FC<CategoriesViewProps> = ({
             }`}
           >
             <TrendingUp className="w-3.5 h-3.5" />
-            <span>Income ({incomeCategories.length})</span>
+            <span>{isBn ? 'আয়' : 'Income'} ({incomeCategories.length})</span>
           </button>
         </div>
 

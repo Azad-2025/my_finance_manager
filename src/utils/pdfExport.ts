@@ -1,6 +1,14 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Transaction, SalaryAdvance, SalaryAdjustment } from '../types/finance';
+import {
+  Transaction,
+  SalaryAdvance,
+  SalaryAdjustment,
+  Borrowing,
+  BorrowingRepayment,
+  Lending,
+  LendingCollection,
+} from '../types/finance';
 import { formatDate } from './formatters';
 import { getSavedUserProfile } from '../lib/supabase';
 
@@ -515,4 +523,599 @@ export function exportSalaryAdvanceStatementToPDF(
   const fileName = `Salary_Advance_Statement_${cleanName}_${dateStr}.pdf`;
   doc.save(fileName);
 }
+
+// ============================================================================
+// LOANS & DEBTS HUB PDF EXPORTS
+// ============================================================================
+
+export interface MoneyLentPDFOptions {
+  periodTitle?: string;
+  totalLent: number;
+  totalCollected: number;
+  remainingReceivable: number;
+}
+
+/**
+ * Generates and downloads Money Lent Report (যে টাকা আমি অন্যকে ধার দিয়েছি)
+ * Displays itemized money lent records, collection history, and outstanding receivables.
+ */
+export function exportMoneyLentReportToPDF(
+  records: Lending[],
+  collections: LendingCollection[],
+  options: MoneyLentPDFOptions
+) {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
+  });
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const now = new Date();
+  const profile = getSavedUserProfile();
+
+  const generatedAt = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Dhaka',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).format(now);
+
+  // 1. Header Banner (Deep Slate with Blue Accent for Lent Money)
+  doc.setFillColor(15, 23, 42); // slate-900
+  doc.rect(0, 0, pageWidth, 30, 'F');
+
+  doc.setFillColor(37, 99, 235); // blue-600
+  doc.rect(0, 28, pageWidth, 2, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(15);
+  doc.setFont('helvetica', 'bold');
+  doc.text('MY FINANCE MANAGER', 14, 12);
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(191, 219, 254); // blue-200
+  doc.text('MONEY LENT REPORT & RECEIVABLES STATEMENT (ধার দেওয়া হিসাব)', 14, 19);
+
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(255, 255, 255);
+  doc.text(`Account Holder: ${profile.name || 'Owner'}`, pageWidth - 14, 12, { align: 'right' });
+
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(148, 163, 184);
+  const metaLine = `${profile.phone ? profile.phone + ' · ' : ''}Generated: ${generatedAt} (BST)`;
+  doc.text(metaLine, pageWidth - 14, 19, { align: 'right' });
+
+  // 2. Summary KPI Box
+  const summaryTop = 36;
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(14, summaryTop, pageWidth - 28, 24, 2, 2, 'FD');
+
+  const colWidth = (pageWidth - 28) / 4;
+
+  // KPI 1: Total Lent
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.setFont('helvetica', 'bold');
+  doc.text('TOTAL MONEY LENT', 18, summaryTop + 8);
+  doc.setFontSize(11);
+  doc.setTextColor(37, 99, 235); // blue-600
+  doc.text(formatCurrency(options.totalLent), 18, summaryTop + 17);
+
+  // KPI 2: Total Collected Back
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.setFont('helvetica', 'bold');
+  doc.text('TOTAL COLLECTED BACK', 18 + colWidth, summaryTop + 8);
+  doc.setFontSize(11);
+  doc.setTextColor(5, 150, 105); // emerald-600
+  doc.text(formatCurrency(options.totalCollected), 18 + colWidth, summaryTop + 17);
+
+  // KPI 3: Remaining Receivable
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.setFont('helvetica', 'bold');
+  doc.text('REMAINING RECEIVABLE', 18 + colWidth * 2, summaryTop + 8);
+  doc.setFontSize(11);
+  doc.setTextColor(217, 119, 6); // amber-600
+  doc.text(formatCurrency(options.remainingReceivable), 18 + colWidth * 2, summaryTop + 17);
+
+  // KPI 4: Scope / Filter
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.setFont('helvetica', 'bold');
+  doc.text('FILTERED PERIOD', 18 + colWidth * 3, summaryTop + 8);
+  doc.setFontSize(9.5);
+  doc.setTextColor(30, 41, 59);
+  doc.text(options.periodTitle || 'All Records', 18 + colWidth * 3, summaryTop + 17);
+
+  // 3. Section 1: Itemized Money Lent Table
+  let currentY = summaryTop + 30;
+  doc.setFontSize(9.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(15, 23, 42);
+  doc.text('1. Itemized Money Lent Records (যে টাকা অন্যকে ধার দেওয়া হয়েছে)', 14, currentY);
+
+  const tableData = records.map((l, idx) => {
+    const remaining = Math.max(0, l.amount - (l.collected_amount || 0));
+    return [
+      (idx + 1).toString(),
+      formatDate(l.lending_date),
+      l.person_name,
+      l.payment_method || 'Cash',
+      l.purpose || '-',
+      formatCurrency(l.amount),
+      formatCurrency(l.collected_amount || 0),
+      formatCurrency(remaining),
+      l.status,
+    ];
+  });
+
+  if (tableData.length === 0) {
+    tableData.push(['-', '-', 'No money lent records found', '-', '-', formatCurrency(0), formatCurrency(0), formatCurrency(0), '-']);
+  }
+
+  autoTable(doc, {
+    startY: currentY + 3,
+    head: [[
+      '#',
+      'Date',
+      "Borrower's Name",
+      'Method',
+      'Purpose / Notes',
+      'Lent (BDT)',
+      'Collected',
+      'Remaining',
+      'Status',
+    ]],
+    body: tableData,
+    foot: [[
+      '',
+      '',
+      'Total',
+      '',
+      '',
+      formatCurrency(options.totalLent),
+      formatCurrency(options.totalCollected),
+      formatCurrency(options.remainingReceivable),
+      '',
+    ]],
+    theme: 'grid',
+    styles: {
+      fontSize: 7.5,
+      cellPadding: 2,
+      font: 'helvetica',
+      textColor: [30, 41, 59],
+      lineColor: [226, 232, 240],
+      lineWidth: 0.2,
+    },
+    headStyles: {
+      fillColor: [30, 58, 138], // blue-900
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8,
+    },
+    footStyles: {
+      fillColor: [241, 245, 249],
+      textColor: [30, 58, 138],
+      fontStyle: 'bold',
+      fontSize: 8,
+      halign: 'right',
+    },
+    columnStyles: {
+      0: { cellWidth: 7, halign: 'center' },
+      1: { cellWidth: 20 },
+      2: { cellWidth: 32, fontStyle: 'bold' },
+      3: { cellWidth: 16 },
+      4: { cellWidth: 'auto' },
+      5: { cellWidth: 24, halign: 'right', fontStyle: 'bold' },
+      6: { cellWidth: 22, halign: 'right' },
+      7: { cellWidth: 22, halign: 'right', fontStyle: 'bold', textColor: [217, 119, 6] },
+      8: { cellWidth: 22, halign: 'center' },
+    },
+    alternateRowStyles: {
+      fillColor: [248, 250, 252],
+    },
+    margin: { left: 14, right: 14, bottom: 25 },
+  });
+
+  // 4. Section 2: Collection Installments History (if available)
+  const lastTable = (doc as any).lastAutoTable;
+  currentY = lastTable ? lastTable.finalY + 10 : currentY + 40;
+
+  if (collections.length > 0) {
+    if (currentY > pageHeight - 55) {
+      doc.addPage();
+      currentY = 20;
+    }
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text('2. Installment Collection Receipts (আদায়কৃত কিস্তির বিবরণ)', 14, currentY);
+
+    const colTableData = collections.map((c, idx) => {
+      const parentLending = records.find((l) => l.id === c.lending_id);
+      return [
+        (idx + 1).toString(),
+        formatDate(c.collection_date),
+        parentLending ? parentLending.person_name : 'Lent Loan',
+        c.payment_method || 'Cash',
+        c.notes || 'Collection receipt',
+        formatCurrency(c.amount),
+      ];
+    });
+
+    autoTable(doc, {
+      startY: currentY + 3,
+      head: [['#', 'Collection Date', 'Collected From', 'Method', 'Notes / Ref', 'Amount (BDT)']],
+      body: colTableData,
+      theme: 'grid',
+      styles: {
+        fontSize: 7.5,
+        cellPadding: 1.8,
+        font: 'helvetica',
+      },
+      headStyles: {
+        fillColor: [5, 150, 105], // emerald-600
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+      },
+      columnStyles: {
+        0: { cellWidth: 8, halign: 'center' },
+        1: { cellWidth: 25 },
+        2: { cellWidth: 35, fontStyle: 'bold' },
+        3: { cellWidth: 25 },
+        4: { cellWidth: 'auto' },
+        5: { cellWidth: 28, halign: 'right', fontStyle: 'bold' },
+      },
+      margin: { left: 14, right: 14, bottom: 30 },
+    });
+  }
+
+  // Signatures Block
+  const finalTable = (doc as any).lastAutoTable;
+  let signatureY = finalTable ? finalTable.finalY + 14 : currentY + 35;
+  if (signatureY > pageHeight - 35) {
+    doc.addPage();
+    signatureY = 25;
+  }
+
+  const sigLineY = signatureY + 16;
+  if (sigLineY <= pageHeight - 12) {
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+
+    doc.line(20, sigLineY, 75, sigLineY);
+    doc.text('Lender Signature', 47.5, sigLineY + 5, { align: 'center' });
+    doc.text(profile.name || 'Account Holder', 47.5, sigLineY + 9, { align: 'center' });
+
+    doc.line(pageWidth - 75, sigLineY, pageWidth - 20, sigLineY);
+    doc.text('Borrower / Witness Acknowledgment', pageWidth - 47.5, sigLineY + 5, { align: 'center' });
+    doc.text('Signature & Date', pageWidth - 47.5, sigLineY + 9, { align: 'center' });
+  }
+
+  // Footer for each page
+  const totalPages = doc.internal.pages.length - 1;
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFontSize(7.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text(
+      `Page ${i} of ${totalPages} · Official Money Lent Statement · My Finance Manager`,
+      pageWidth / 2,
+      pageHeight - 6,
+      { align: 'center' }
+    );
+  }
+
+  const dateStr = now.toISOString().slice(0, 10);
+  const fileName = `Money_Lent_Report_${dateStr}.pdf`;
+  doc.save(fileName);
+}
+
+export interface MoneyBorrowedPDFOptions {
+  periodTitle?: string;
+  totalBorrowed: number;
+  totalRepaid: number;
+  remainingDebt: number;
+}
+
+/**
+ * Generates and downloads Money Borrowed & Repaid Report (ধার নেওয়া ও পরিশোধের হিসাব)
+ * Clearly separates borrowed liabilities and repayments, showing net remaining debt.
+ */
+export function exportBorrowedAndRepaidReportToPDF(
+  borrowings: Borrowing[],
+  repayments: BorrowingRepayment[],
+  options: MoneyBorrowedPDFOptions
+) {
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
+  });
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const now = new Date();
+  const profile = getSavedUserProfile();
+
+  const generatedAt = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Dhaka',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).format(now);
+
+  // 1. Header Banner (Deep Slate with Orange/Amber Accent for Borrowed Money)
+  doc.setFillColor(15, 23, 42); // slate-900
+  doc.rect(0, 0, pageWidth, 30, 'F');
+
+  doc.setFillColor(234, 88, 12); // orange-600
+  doc.rect(0, 28, pageWidth, 2, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(15);
+  doc.setFont('helvetica', 'bold');
+  doc.text('MY FINANCE MANAGER', 14, 12);
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(254, 215, 170); // orange-200
+  doc.text('MONEY BORROWED & REPAID STATEMENT (ধার নেওয়া ও পরিশোধের বিবরণী)', 14, 19);
+
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(255, 255, 255);
+  doc.text(`Borrower: ${profile.name || 'Owner'}`, pageWidth - 14, 12, { align: 'right' });
+
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(148, 163, 184);
+  const metaLine = `${profile.phone ? profile.phone + ' · ' : ''}Generated: ${generatedAt} (BST)`;
+  doc.text(metaLine, pageWidth - 14, 19, { align: 'right' });
+
+  // 2. Summary KPI Box
+  const summaryTop = 36;
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(14, summaryTop, pageWidth - 28, 24, 2, 2, 'FD');
+
+  const colWidth = (pageWidth - 28) / 4;
+
+  // KPI 1: Total Borrowed
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.setFont('helvetica', 'bold');
+  doc.text('TOTAL BORROWED (GROSS)', 18, summaryTop + 8);
+  doc.setFontSize(11);
+  doc.setTextColor(234, 88, 12); // orange-600
+  doc.text(formatCurrency(options.totalBorrowed), 18, summaryTop + 17);
+
+  // KPI 2: Total Repaid
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.setFont('helvetica', 'bold');
+  doc.text('TOTAL REPAID TO DATE', 18 + colWidth, summaryTop + 8);
+  doc.setFontSize(11);
+  doc.setTextColor(5, 150, 105); // emerald-600
+  doc.text(formatCurrency(options.totalRepaid), 18 + colWidth, summaryTop + 17);
+
+  // KPI 3: Remaining Debt
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.setFont('helvetica', 'bold');
+  doc.text('REMAINING DEBT (LIABILITY)', 18 + colWidth * 2, summaryTop + 8);
+  doc.setFontSize(11);
+  doc.setTextColor(220, 38, 38); // red-600
+  doc.text(formatCurrency(options.remainingDebt), 18 + colWidth * 2, summaryTop + 17);
+
+  // KPI 4: Scope / Filter
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.setFont('helvetica', 'bold');
+  doc.text('FILTERED PERIOD', 18 + colWidth * 3, summaryTop + 8);
+  doc.setFontSize(9.5);
+  doc.setTextColor(30, 41, 59);
+  doc.text(options.periodTitle || 'All Records', 18 + colWidth * 3, summaryTop + 17);
+
+  // 3. Section 1: Itemized Borrowed Records Table
+  let currentY = summaryTop + 30;
+  doc.setFontSize(9.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(15, 23, 42);
+  doc.text('1. Itemized Borrowed Money Records (যে টাকা ধার নেওয়া হয়েছে)', 14, currentY);
+
+  const tableData = borrowings.map((b, idx) => {
+    const remaining = Math.max(0, b.amount - (b.repaid_amount || 0));
+    return [
+      (idx + 1).toString(),
+      formatDate(b.borrowed_date),
+      b.person_name,
+      b.payment_method || 'Cash',
+      b.purpose || '-',
+      formatCurrency(b.amount),
+      formatCurrency(b.repaid_amount || 0),
+      formatCurrency(remaining),
+      b.status,
+    ];
+  });
+
+  if (tableData.length === 0) {
+    tableData.push(['-', '-', 'No borrowing records found', '-', '-', formatCurrency(0), formatCurrency(0), formatCurrency(0), '-']);
+  }
+
+  autoTable(doc, {
+    startY: currentY + 3,
+    head: [[
+      '#',
+      'Date',
+      "Lender's Name",
+      'Method',
+      'Purpose / Notes',
+      'Borrowed (BDT)',
+      'Repaid',
+      'Remaining Debt',
+      'Status',
+    ]],
+    body: tableData,
+    foot: [[
+      '',
+      '',
+      'Total',
+      '',
+      '',
+      formatCurrency(options.totalBorrowed),
+      formatCurrency(options.totalRepaid),
+      formatCurrency(options.remainingDebt),
+      '',
+    ]],
+    theme: 'grid',
+    styles: {
+      fontSize: 7.5,
+      cellPadding: 2,
+      font: 'helvetica',
+      textColor: [30, 41, 59],
+      lineColor: [226, 232, 240],
+      lineWidth: 0.2,
+    },
+    headStyles: {
+      fillColor: [154, 52, 18], // orange-800
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8,
+    },
+    footStyles: {
+      fillColor: [241, 245, 249],
+      textColor: [154, 52, 18],
+      fontStyle: 'bold',
+      fontSize: 8,
+      halign: 'right',
+    },
+    columnStyles: {
+      0: { cellWidth: 7, halign: 'center' },
+      1: { cellWidth: 20 },
+      2: { cellWidth: 32, fontStyle: 'bold' },
+      3: { cellWidth: 16 },
+      4: { cellWidth: 'auto' },
+      5: { cellWidth: 24, halign: 'right', fontStyle: 'bold' },
+      6: { cellWidth: 22, halign: 'right' },
+      7: { cellWidth: 22, halign: 'right', fontStyle: 'bold', textColor: [220, 38, 38] },
+      8: { cellWidth: 22, halign: 'center' },
+    },
+    alternateRowStyles: {
+      fillColor: [248, 250, 252],
+    },
+    margin: { left: 14, right: 14, bottom: 25 },
+  });
+
+  // 4. Section 2: Repayment Installments History Table
+  const lastTable = (doc as any).lastAutoTable;
+  currentY = lastTable ? lastTable.finalY + 10 : currentY + 40;
+
+  if (repayments.length > 0) {
+    if (currentY > pageHeight - 55) {
+      doc.addPage();
+      currentY = 20;
+    }
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text('2. Installment Repayment Vouchers (ঋণ পরিশোধের ভাউচারসমূহ)', 14, currentY);
+
+    const repTableData = repayments.map((r, idx) => {
+      const parentBorrowing = borrowings.find((b) => b.id === r.borrowing_id);
+      return [
+        (idx + 1).toString(),
+        formatDate(r.payment_date),
+        parentBorrowing ? parentBorrowing.person_name : 'Debt Loan',
+        'Repaid (পরিশোধ)',
+        r.payment_method || 'bKash',
+        r.notes || 'Installment repayment',
+        formatCurrency(r.amount),
+      ];
+    });
+
+    autoTable(doc, {
+      startY: currentY + 3,
+      head: [['#', 'Repayment Date', 'Repaid To', 'Type', 'Method', 'Notes / Ref', 'Amount (BDT)']],
+      body: repTableData,
+      theme: 'grid',
+      styles: {
+        fontSize: 7.5,
+        cellPadding: 1.8,
+        font: 'helvetica',
+      },
+      headStyles: {
+        fillColor: [5, 150, 105], // emerald-600
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+      },
+      columnStyles: {
+        0: { cellWidth: 8, halign: 'center' },
+        1: { cellWidth: 24 },
+        2: { cellWidth: 32, fontStyle: 'bold' },
+        3: { cellWidth: 24 },
+        4: { cellWidth: 20 },
+        5: { cellWidth: 'auto' },
+        6: { cellWidth: 26, halign: 'right', fontStyle: 'bold' },
+      },
+      margin: { left: 14, right: 14, bottom: 30 },
+    });
+  }
+
+  // Signatures Block
+  const finalTable = (doc as any).lastAutoTable;
+  let signatureY = finalTable ? finalTable.finalY + 14 : currentY + 35;
+  if (signatureY > pageHeight - 35) {
+    doc.addPage();
+    signatureY = 25;
+  }
+
+  const sigLineY = signatureY + 16;
+  if (sigLineY <= pageHeight - 12) {
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+
+    doc.line(20, sigLineY, 75, sigLineY);
+    doc.text('Borrower Signature', 47.5, sigLineY + 5, { align: 'center' });
+    doc.text(profile.name || 'Account Holder', 47.5, sigLineY + 9, { align: 'center' });
+
+    doc.line(pageWidth - 75, sigLineY, pageWidth - 20, sigLineY);
+    doc.text('Lender / Accounts Acknowledgment', pageWidth - 47.5, sigLineY + 5, { align: 'center' });
+    doc.text('Signature & Date', pageWidth - 47.5, sigLineY + 9, { align: 'center' });
+  }
+
+  // Footer for each page
+  const totalPages = doc.internal.pages.length - 1;
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFontSize(7.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text(
+      `Page ${i} of ${totalPages} · Official Money Borrowed Statement · My Finance Manager`,
+      pageWidth / 2,
+      pageHeight - 6,
+      { align: 'center' }
+    );
+  }
+
+  const dateStr = now.toISOString().slice(0, 10);
+  const fileName = `Money_Borrowed_And_Repaid_Report_${dateStr}.pdf`;
+  doc.save(fileName);
+}
+
 

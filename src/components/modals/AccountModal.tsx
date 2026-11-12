@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Wallet } from 'lucide-react';
 import { useFinance } from '../../context/FinanceContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { Account, AccountType } from '../../types/finance';
 
 interface AccountModalProps {
@@ -24,6 +25,8 @@ export const AccountModal: React.FC<AccountModalProps> = ({
   editingAccount,
 }) => {
   const { addAccount, updateAccount } = useFinance();
+  const { language } = useLanguage();
+  const isBn = language === 'bn';
 
   const [name, setName] = useState('');
   const [type, setType] = useState<AccountType>('Cash Wallet');
@@ -54,12 +57,12 @@ export const AccountModal: React.FC<AccountModalProps> = ({
     setError('');
 
     if (!name.trim()) {
-      setError('Please enter an account or wallet name.');
+      setError(isBn ? 'দয়া করে একটি অ্যাকাউন্ট বা ওয়ালেটের নাম লিখুন।' : 'Please enter an account or wallet name.');
       return;
     }
     const numBalance = parseFloat(balance);
     if (isNaN(numBalance)) {
-      setError('Please enter a valid numeric starting balance.');
+      setError(isBn ? 'দয়া করে একটি সঠিক সংখ্যাসূচক প্রাথমিক ব্যালেন্স লিখুন।' : 'Please enter a valid numeric starting balance.');
       return;
     }
 
@@ -85,17 +88,19 @@ export const AccountModal: React.FC<AccountModalProps> = ({
       setSubmitting(false);
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Failed to save account');
+      setError(err.message || (isBn ? 'অ্যাকাউন্ট সংরক্ষণ ব্যর্থ হয়েছে' : 'Failed to save account'));
       setSubmitting(false);
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-8">
+      <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-150">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
           <h3 className="text-base font-bold text-slate-900 dark:text-white">
-            {editingAccount ? 'Edit Account' : 'Add Financial Account'}
+            {editingAccount
+              ? (isBn ? 'অ্যাকাউন্ট সম্পাদনা' : 'Edit Account')
+              : (isBn ? 'নতুন আর্থিক অ্যাকাউন্ট যোগ করুন' : 'Add Financial Account')}
           </h3>
           <button
             onClick={onClose}
@@ -114,7 +119,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
 
           <div>
             <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-              Account Type *
+              {isBn ? 'অ্যাকাউন্টের ধরন *' : 'Account Type *'}
             </label>
             <select
               value={type}
@@ -131,12 +136,12 @@ export const AccountModal: React.FC<AccountModalProps> = ({
 
           <div>
             <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-              Account / Wallet Name *
+              {isBn ? 'অ্যাকাউন্ট / ওয়ালেটের নাম *' : 'Account / Wallet Name *'}
             </label>
             <input
               type="text"
               required
-              placeholder="e.g. City Bank Salary, bKash Personal"
+              placeholder={isBn ? 'যেমন: সিটি ব্যাংক স্যালারি, বিকাশ পার্সোনাল' : 'e.g. City Bank Salary, bKash Personal'}
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -145,7 +150,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
 
           <div>
             <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-              Initial / Current Balance (BDT / ৳) *
+              {isBn ? 'প্রাথমিক / বর্তমান ব্যালেন্স (BDT / ৳) *' : 'Initial / Current Balance (BDT / ৳) *'}
             </label>
             <div className="relative">
               <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">৳</span>
@@ -163,7 +168,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
 
           <div>
             <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-              Account / Mobile Number (Optional)
+              {isBn ? 'হিসাব / মোবাইল নম্বর (ঐচ্ছিক)' : 'Account / Mobile Number (Optional)'}
             </label>
             <input
               type="text"
@@ -180,14 +185,18 @@ export const AccountModal: React.FC<AccountModalProps> = ({
               onClick={onClose}
               className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition"
             >
-              Cancel
+              {isBn ? 'বাতিল' : 'Cancel'}
             </button>
             <button
               type="submit"
               disabled={submitting}
               className="px-5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition disabled:opacity-50"
             >
-              {submitting ? 'Saving...' : editingAccount ? 'Update Account' : 'Create Account'}
+              {submitting
+                ? (isBn ? 'সংরক্ষণ হচ্ছে...' : 'Saving...')
+                : editingAccount
+                ? (isBn ? 'আপডেট করুন' : 'Update Account')
+                : (isBn ? 'তৈরি করুন' : 'Create Account')}
             </button>
           </div>
         </form>

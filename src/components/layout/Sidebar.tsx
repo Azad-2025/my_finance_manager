@@ -133,12 +133,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onSelectView }) =
 
       {/* Quick Overview Tile in Sidebar bottom */}
       <div className="p-4 m-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
-        <div className="text-[11px] font-medium text-slate-500">Net Account Balance</div>
+        <div className="text-[11px] font-medium text-slate-500">
+          {t('netAccountBalance', 'Net Account Balance')}
+        </div>
         <div className="text-base font-bold text-slate-900 dark:text-white font-mono tabular-nums mt-0.5">
           {formatBDT(summary.totalBalance)}
         </div>
         <div className="mt-2 text-[10px] text-slate-400 flex items-center justify-between">
-          <span>Income: <span className="text-emerald-600 font-semibold">{formatBDT(summary.totalIncome)}</span></span>
+          <span>{t('income')}: <span className="text-emerald-600 font-semibold">{formatBDT(summary.totalIncome)}</span></span>
         </div>
       </div>
     </aside>

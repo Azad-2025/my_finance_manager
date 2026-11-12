@@ -78,6 +78,7 @@ export interface Borrowing {
   phone_number?: string;
   borrowed_date: string;
   amount: number;
+  payment_method?: PaymentMethod | string;
   purpose?: string;
   due_date?: string;
   notes?: string;
@@ -110,6 +111,7 @@ export interface Lending {
   phone_number?: string;
   lending_date: string;
   amount: number;
+  payment_method?: PaymentMethod | string;
   purpose?: string;
   expected_return_date?: string;
   notes?: string;

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { X, DollarSign, CreditCard } from 'lucide-react';
+import { X, CreditCard } from 'lucide-react';
 import { useFinance } from '../../context/FinanceContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { Lending, PaymentMethod } from '../../types/finance';
 import { formatBDT } from '../../utils/formatters';
 
@@ -10,19 +11,9 @@ interface CollectionModalProps {
   lending: Lending | null;
 }
 
-const PAYMENT_METHODS: PaymentMethod[] = [
-  'Cash',
-  'bKash',
-  'Nagad',
-  'Rocket',
-  'Bank Transfer',
-  'Debit Card',
-  'Credit Card',
-  'Other',
-];
-
 export const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, lending }) => {
   const { recordLendingCollection, accounts } = useFinance();
+  const { t, isBn } = useLanguage();
 
   const [amount, setAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | string>('bKash');
@@ -41,11 +32,15 @@ export const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClos
 
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
-      setError('Please enter a valid collection amount.');
+      setError(isBn ? 'সঠিক আদায়ের পরিমাণ লিখুন।' : 'Please enter a valid collection amount.');
       return;
     }
     if (numAmount > remainingReceivable) {
-      setError(`Collection amount cannot exceed remaining receivable (${formatBDT(remainingReceivable)}).`);
+      setError(
+        isBn
+          ? `আদায়ের পরিমাণ অবশিষ্ট পাওনার (${formatBDT(remainingReceivable)}) চেয়ে বেশি হতে পারে না।`
+          : `Collection amount cannot exceed remaining receivable (${formatBDT(remainingReceivable)}).`
+      );
       return;
     }
 
@@ -61,7 +56,7 @@ export const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClos
       setSubmitting(false);
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Failed to record collection');
+      setError(err.message || (isBn ? 'আদায় রেকর্ড সংরক্ষণ করা যায়নি' : 'Failed to record collection'));
       setSubmitting(false);
     }
   };
@@ -73,10 +68,16 @@ export const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClos
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
       <div className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-8">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-blue-50/50 dark:bg-blue-950/20">
           <div>
-            <h3 className="text-base font-bold text-slate-900 dark:text-white">Record Loan Collection</h3>
-            <p className="text-[11px] text-slate-500">Receiving repayment from {lending.person_name}</p>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">
+              {isBn ? 'ধার আদায় লিপিবদ্ধ করুন' : 'Record Loan Collection'}
+            </h3>
+            <p className="text-[11px] text-slate-500">
+              {isBn
+                ? `${lending.person_name}-এর থেকে টাকা আদায় গ্রহণ`
+                : `Receiving repayment from ${lending.person_name}`}
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -96,7 +97,9 @@ export const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClos
           {/* Receivable Summary Card */}
           <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-center justify-between">
             <div>
-              <div className="text-[11px] text-slate-500">Remaining Receivable</div>
+              <div className="text-[11px] text-slate-500">
+                {isBn ? 'বকেয়া পাওনা' : 'Remaining Receivable'}
+              </div>
               <div className="text-base font-bold text-blue-600 font-mono tabular-nums">
                 {formatBDT(remainingReceivable)}
               </div>
@@ -106,13 +109,13 @@ export const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClos
               onClick={setFullCollection}
               className="px-2.5 py-1 text-[11px] font-bold text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-950/80 rounded-lg hover:bg-blue-200 transition"
             >
-              Collect Full
+              {isBn ? 'সম্পূর্ণ আদায়' : 'Collect Full'}
             </button>
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-              Collected Amount (BDT / ৳) *
+              {isBn ? 'আদায়ের পরিমাণ (৳) *' : 'Collected Amount (BDT / ৳) *'}
             </label>
             <div className="relative">
               <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">৳</span>
@@ -125,7 +128,7 @@ export const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClos
                 placeholder="0.00"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="w-full pl-8 pr-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white font-mono font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full pl-8 pr-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white font-mono font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
@@ -133,31 +136,31 @@ export const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClos
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                Received Via *
+                {isBn ? 'পেমেন্ট মাধ্যম *' : 'Received Via *'}
               </label>
               <select
                 value={paymentMethod}
                 onChange={(e) => setPaymentMethod(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {PAYMENT_METHODS.map((method) => (
-                  <option key={method} value={method}>
-                    {method}
-                  </option>
-                ))}
+                <option value="Cash">{isBn ? 'নগদ (Cash)' : 'Cash'}</option>
+                <option value="bKash">{isBn ? 'বিকাশ (bKash)' : 'bKash'}</option>
+                <option value="Nagad">{isBn ? 'নগদ (Nagad)' : 'Nagad'}</option>
+                <option value="Bank Transfer">{isBn ? 'ব্যাংক একাউন্ট' : 'Bank Transfer'}</option>
+                <option value="Other">{isBn ? 'অন্যান্য' : 'Other'}</option>
               </select>
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                Deposit to Account
+                {isBn ? 'জমা দেওয়ার একাউন্ট' : 'Deposit to Account'}
               </label>
               <select
                 value={accountId}
                 onChange={(e) => setAccountId(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">-- No Account --</option>
+                <option value="">{isBn ? '-- কোনো একাউন্ট নয় --' : '-- No Account --'}</option>
                 {accounts.map((acc) => (
                   <option key={acc.id} value={acc.id}>
                     {acc.name} (৳{acc.balance.toLocaleString()})
@@ -169,14 +172,14 @@ export const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClos
 
           <div>
             <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-              Collection Notes (Optional)
+              {isBn ? 'আদায়ের নোট / ট্রানজেকশন আইডি (ঐচ্ছিক)' : 'Collection Notes (Optional)'}
             </label>
             <textarea
               rows={2}
-              placeholder="e.g. Received cash at office, bank transfer..."
+              placeholder={isBn ? 'যেমন: অফিসে নগদ গ্রহণ বা বিকাশ TrxID...' : 'e.g. Received cash at office, bank transfer...'}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
@@ -186,14 +189,16 @@ export const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClos
               onClick={onClose}
               className="px-4 py-2.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition"
             >
-              Cancel
+              {isBn ? 'বাতিল' : 'Cancel'}
             </button>
             <button
               type="submit"
               disabled={submitting}
               className="px-5 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm transition disabled:opacity-50"
             >
-              {submitting ? 'Recording...' : 'Confirm Collection'}
+              {submitting
+                ? (isBn ? 'সংরক্ষণ হচ্ছে...' : 'Recording...')
+                : (isBn ? 'আদায় নিশ্চিত করুন' : 'Confirm Collection')}
             </button>
           </div>
         </form>

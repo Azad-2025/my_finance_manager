@@ -47,8 +47,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onSelectView,
   onEditTransaction,
 }) => {
-  const { summary, transactions, categories, borrowings, lendings } = useFinance();
-  const { t } = useLanguage();
+  const { summary, transactions, categories, borrowings, lendings, accounts } = useFinance();
+  const { t, isBn } = useLanguage();
 
   const [dateFilter, setDateFilter] = useState<DateFilterOption>('month');
   const [customStart, setCustomStart] = useState('');
@@ -187,19 +187,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
         <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
           <Filter className="w-3.5 h-3.5 text-emerald-600" />
-          <span className="hidden sm:inline">Timeline:</span>
+          <span className="hidden sm:inline">{isBn ? 'সময়কাল:' : 'Timeline:'}</span>
         </div>
 
         <div className="flex flex-wrap items-center gap-1">
           {(
             [
-              { id: 'today', label: 'Today' },
-              { id: 'yesterday', label: 'Yesterday' },
-              { id: 'week', label: 'This Week' },
-              { id: 'month', label: 'This Month' },
-              { id: 'last_month', label: 'Last Month' },
-              { id: 'all', label: 'All Time' },
-              { id: 'custom', label: 'Custom' },
+              { id: 'today', label: isBn ? 'আজ' : 'Today' },
+              { id: 'yesterday', label: isBn ? 'গতকাল' : 'Yesterday' },
+              { id: 'week', label: isBn ? 'চলতি সপ্তাহ' : 'This Week' },
+              { id: 'month', label: isBn ? 'চলতি মাস' : 'This Month' },
+              { id: 'last_month', label: isBn ? 'গত মাস' : 'Last Month' },
+              { id: 'all', label: isBn ? 'সকল সময়' : 'All Time' },
+              { id: 'custom', label: isBn ? 'কাস্টম' : 'Custom' },
             ] as const
           ).map((opt) => (
             <button
@@ -224,7 +224,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               onChange={(e) => setCustomStart(e.target.value)}
               className="px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-xs font-medium"
             />
-            <span className="text-xs text-slate-400">to</span>
+            <span className="text-xs text-slate-400">{isBn ? 'থেকে' : 'to'}</span>
             <input
               type="date"
               value={customEnd}
@@ -249,7 +249,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {formatBDT(summary.totalBalance)}
           </div>
           <div className="mt-1 text-[10px] text-slate-400 truncate">
-            Across {useFinance().accounts.length} active wallets
+            {isBn ? `${accounts.length}টি সক্রিয় ওয়ালেট` : `Across ${accounts.length} active wallets`}
           </div>
         </div>
 
@@ -265,7 +265,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {formatBDT(summary.totalIncome)}
           </div>
           <div className="mt-1 text-[10px] text-slate-400">
-            Selected: <span className="font-semibold text-slate-700 dark:text-slate-300">{formatBDT(periodStats.income)}</span>
+            {isBn ? 'নির্বাচিত:' : 'Selected:'} <span className="font-semibold text-slate-700 dark:text-slate-300">{formatBDT(periodStats.income)}</span>
           </div>
         </div>
 
@@ -281,7 +281,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {formatBDT(summary.totalPersonalExpenses)}
           </div>
           <div className="mt-1 text-[10px] text-slate-400">
-            Selected: <span className="font-semibold text-slate-700 dark:text-slate-300">{formatBDT(periodStats.personalExpense)}</span>
+            {isBn ? 'নির্বাচিত:' : 'Selected:'} <span className="font-semibold text-slate-700 dark:text-slate-300">{formatBDT(periodStats.personalExpense)}</span>
           </div>
         </div>
 
@@ -297,7 +297,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {formatBDT(summary.totalOfficeExpenses)}
           </div>
           <div className="mt-1 text-[10px] text-slate-400 truncate">
-            Pending Reimb: <span className="font-semibold text-amber-600">{formatBDT(summary.pendingOfficeReimbursement)}</span>
+            {isBn ? 'বকেয়া ক্লেইম:' : 'Pending Reimb:'} <span className="font-semibold text-amber-600">{formatBDT(summary.pendingOfficeReimbursement)}</span>
           </div>
         </div>
 
@@ -313,7 +313,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {formatBDT(summary.totalBorrowed)}
           </div>
           <div className="mt-1 text-[10px] text-slate-400">
-            Repaid: <span className="font-semibold text-emerald-600">{formatBDT(summary.totalBorrowedRepaid)}</span>
+            {isBn ? 'পরিশোধিত:' : 'Repaid:'} <span className="font-semibold text-emerald-600">{formatBDT(summary.totalBorrowedRepaid)}</span>
           </div>
         </div>
 
@@ -329,7 +329,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {formatBDT(summary.amountIOwe)}
           </div>
           <div className="mt-1 text-[10px] text-slate-400">
-            {borrowings.filter((b) => b.status !== 'Fully Repaid').length} active debt loan(s)
+            {borrowings.filter((b) => b.status !== 'Fully Repaid').length} {isBn ? 'টি সক্রিয় দেনা' : 'active debt loan(s)'}
           </div>
         </div>
 
@@ -345,7 +345,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {formatBDT(summary.totalLent)}
           </div>
           <div className="mt-1 text-[10px] text-slate-400">
-            Collected: <span className="font-semibold text-emerald-600">{formatBDT(summary.totalLentCollected)}</span>
+            {isBn ? 'আদায়কৃত:' : 'Collected:'} <span className="font-semibold text-emerald-600">{formatBDT(summary.totalLentCollected)}</span>
           </div>
         </div>
 
@@ -361,7 +361,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {formatBDT(summary.amountOwedToMe)}
           </div>
           <div className="mt-1 text-[10px] text-slate-400">
-            {lendings.filter((l) => l.status !== 'Fully Collected').length} pending collection(s)
+            {lendings.filter((l) => l.status !== 'Fully Collected').length} {isBn ? 'টি বকেয়া পাওনা' : 'pending collection(s)'}
           </div>
         </div>
       </div>
@@ -369,25 +369,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Quick Cadence Summary: Today, This Week, This Month */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 rounded-2xl bg-emerald-950/5 dark:bg-emerald-950/20 border border-emerald-200/50 dark:border-emerald-800/40">
         <div>
-          <span className="text-[11px] text-slate-500 font-medium">Today's Expenses</span>
+          <span className="text-[11px] text-slate-500 font-medium">{t('todayExpenses')}</span>
           <div className="text-base font-bold font-mono tabular-nums text-rose-600 dark:text-rose-400 mt-0.5">
             {formatBDT(summary.todayExpenses)}
           </div>
         </div>
         <div>
-          <span className="text-[11px] text-slate-500 font-medium">Today's Income</span>
+          <span className="text-[11px] text-slate-500 font-medium">{t('todayIncome')}</span>
           <div className="text-base font-bold font-mono tabular-nums text-emerald-600 dark:text-emerald-400 mt-0.5">
             {formatBDT(summary.todayIncome)}
           </div>
         </div>
         <div>
-          <span className="text-[11px] text-slate-500 font-medium">This Week's Expenses</span>
+          <span className="text-[11px] text-slate-500 font-medium">{isBn ? 'চলতি সপ্তাহের খরচ' : "This Week's Expenses"}</span>
           <div className="text-base font-bold font-mono tabular-nums text-slate-900 dark:text-white mt-0.5">
             {formatBDT(summary.weekExpenses)}
           </div>
         </div>
         <div>
-          <span className="text-[11px] text-slate-500 font-medium">This Month's Expenses</span>
+          <span className="text-[11px] text-slate-500 font-medium">{isBn ? 'চলতি মাসের খরচ' : "This Month's Expenses"}</span>
           <div className="text-base font-bold font-mono tabular-nums text-slate-900 dark:text-white mt-0.5">
             {formatBDT(summary.monthExpenses)}
           </div>
@@ -400,8 +400,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="lg:col-span-2 p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Monthly Cash Flow Trend</h3>
-              <p className="text-[11px] text-slate-500">Income vs Total Expenses over past 6 months</p>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                {isBn ? 'মাসিক নগদ প্রবাহ ট্রেন্ড' : 'Monthly Cash Flow Trend'}
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                {isBn ? 'গত ৬ মাসের আয় ও ব্যয়ের তুলনামূলক চিত্র' : 'Income vs Total Expenses over past 6 months'}
+              </p>
             </div>
             <div className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
               BDT (৳)
@@ -428,8 +432,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   }}
                 />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
-                <Line type="monotone" dataKey="income" name="Income" stroke="#10b981" strokeWidth={3} dot={{ r: 4 }} />
-                <Line type="monotone" dataKey="totalExpenses" name="Total Expenses" stroke="#f43f5e" strokeWidth={3} dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="income" name={isBn ? 'আয়' : 'Income'} stroke="#10b981" strokeWidth={3} dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="totalExpenses" name={isBn ? 'মোট ব্যয়' : 'Total Expenses'} stroke="#f43f5e" strokeWidth={3} dot={{ r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -439,8 +443,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col">
           <div className="flex items-center justify-between mb-2">
             <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Category Breakdown</h3>
-              <p className="text-[11px] text-slate-500">Spending in selected period</p>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                {isBn ? 'ক্যাটাগরি ভিত্তিক ব্যয়' : 'Category Breakdown'}
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                {isBn ? 'নির্বাচিত সময়ের ব্যয়ের বণ্টন' : 'Spending in selected period'}
+              </p>
             </div>
           </div>
 
@@ -461,7 +469,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(val: any) => [formatBDT(Number(val)), 'Amount']}
+                    formatter={(val: any) => [formatBDT(Number(val)), isBn ? 'পরিমাণ' : 'Amount']}
                     contentStyle={{
                       backgroundColor: '#0f172a',
                       border: '1px solid #1e293b',
@@ -474,7 +482,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </ResponsiveContainer>
             ) : (
               <div className="h-full flex items-center justify-center text-xs text-slate-400">
-                No expense records in this range
+                {isBn ? 'এই সময়সীমার মধ্যে কোনো খরচের রেকর্ড নেই' : 'No expense records in this range'}
               </div>
             )}
           </div>
@@ -500,8 +508,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Personal vs Office Bar Card */}
         <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">Personal vs Office</h3>
-          <p className="text-[11px] text-slate-500 mb-4">Spending breakdown in selected period</p>
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
+            {isBn ? 'ব্যক্তিগত বনাম অফিস খরচ' : 'Personal vs Office'}
+          </h3>
+          <p className="text-[11px] text-slate-500 mb-4">
+            {isBn ? 'নির্বাচিত সময়ের ব্যয়ের তুলনামূলক চিত্র' : 'Spending breakdown in selected period'}
+          </p>
 
           <div className="h-44 w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -524,23 +536,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '4px' }} />
-                <Bar dataKey="Personal" fill="#f43f5e" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="Office" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="Personal" name={isBn ? 'ব্যক্তিগত' : 'Personal'} fill="#f43f5e" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="Office" name={isBn ? 'অফিস' : 'Office'} fill="#f59e0b" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
 
           <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2 text-xs">
             <div className="flex justify-between items-center">
-              <span className="text-slate-500">Personal Spending:</span>
+              <span className="text-slate-500">{isBn ? 'ব্যক্তিগত ব্যয়:' : 'Personal Spending:'}</span>
               <span className="font-mono font-bold text-rose-600">{formatBDT(periodStats.personalExpense)}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-slate-500">Office Spending:</span>
+              <span className="text-slate-500">{isBn ? 'অফিস ব্যয়:' : 'Office Spending:'}</span>
               <span className="font-mono font-bold text-amber-600">{formatBDT(periodStats.officeExpense)}</span>
             </div>
             <div className="flex justify-between items-center font-bold text-slate-900 dark:text-white">
-              <span>Total Spending:</span>
+              <span>{isBn ? 'সর্বমোট ব্যয়:' : 'Total Spending:'}</span>
               <span className="font-mono">{formatBDT(periodStats.totalExpense)}</span>
             </div>
           </div>
@@ -550,14 +562,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="lg:col-span-2 p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">Recent Financial Activity</h3>
-              <p className="text-[11px] text-slate-500">Latest records in your transaction ledger</p>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">{t('recentActivity')}</h3>
+              <p className="text-[11px] text-slate-500">
+                {isBn ? 'আপনার লেজারের সর্বশেষ লিপিবদ্ধ লেনদেনসমূহ' : 'Latest records in your transaction ledger'}
+              </p>
             </div>
             <button
               onClick={() => onSelectView('transactions')}
               className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
             >
-              View All
+              {t('viewAll')}
             </button>
           </div>
 
@@ -626,7 +640,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             {transactions.length === 0 && (
               <div className="p-8 text-center text-xs text-slate-400">
-                No transactions recorded yet. Click "Add Transaction" to start.
+                {t('noTransactionsYet')}
               </div>
             )}
           </div>

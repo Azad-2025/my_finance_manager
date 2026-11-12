@@ -26,6 +26,7 @@ import {
   Legend,
 } from 'recharts';
 import { useFinance } from '../context/FinanceContext';
+import { useLanguage } from '../context/LanguageContext';
 import { formatBDT, formatDate, getTodayString } from '../utils/formatters';
 
 type ReportCadence = 'daily' | 'weekly' | 'monthly' | 'yearly';
@@ -33,6 +34,8 @@ type ReportSection = 'all' | 'personal' | 'office' | 'income' | 'borrowing' | 'l
 
 export const ReportsView: React.FC = () => {
   const { transactions, borrowings, lendings, exportToCSV } = useFinance();
+  const { language } = useLanguage();
+  const isBn = language === 'bn';
 
   const [cadence, setCadence] = useState<ReportCadence>('monthly');
   const [activeSection, setActiveSection] = useState<ReportSection>('all');
@@ -152,10 +155,12 @@ export const ReportsView: React.FC = () => {
         <div>
           <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-indigo-500" />
-            <span>Financial Reports & Analytics</span>
+            <span>{isBn ? 'আর্থিক প্রতিবেদন ও অ্যানালিটিক্স' : 'Financial Reports & Analytics'}</span>
           </h2>
           <p className="text-xs text-slate-500">
-            Audit-grade reporting, cashflow trends, and balance sheets in BDT (৳)
+            {isBn
+              ? 'অডিট গ্রেড রিপোর্টিং, ক্যাশফ্লো প্রবণতা এবং আর্থিক বিবরণী (টাকায় / ৳)'
+              : 'Audit-grade reporting, cashflow trends, and balance sheets in BDT (৳)'}
           </p>
         </div>
 
@@ -165,7 +170,7 @@ export const ReportsView: React.FC = () => {
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 text-xs font-bold shadow-xs transition"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Export Report CSV</span>
+            <span>{isBn ? 'রিপোর্ট CSV ডাউনলোড' : 'Export Report CSV'}</span>
           </button>
         </div>
       </div>
@@ -174,12 +179,12 @@ export const ReportsView: React.FC = () => {
       <div className="flex flex-wrap items-center gap-2 p-1.5 rounded-2xl bg-slate-100 dark:bg-slate-800 text-xs">
         {(
           [
-            { id: 'all', label: 'Consolidated Statement' },
-            { id: 'personal', label: 'Personal Expenses' },
-            { id: 'office', label: 'Office & Reimbursements' },
-            { id: 'income', label: 'Income & Earnings' },
-            { id: 'borrowing', label: 'Debt & Liabilities' },
-            { id: 'lending', label: 'Lent & Receivables' },
+            { id: 'all', labelEn: 'Consolidated Statement', labelBn: 'সমন্বিত বিবরণী' },
+            { id: 'personal', labelEn: 'Personal Expenses', labelBn: 'ব্যক্তিগত ব্যয়' },
+            { id: 'office', labelEn: 'Office & Reimbursements', labelBn: 'অফিস ও রিইমবার্সমেন্ট' },
+            { id: 'income', labelEn: 'Income & Earnings', labelBn: 'আয় ও উপার্জন' },
+            { id: 'borrowing', labelEn: 'Debt & Liabilities', labelBn: 'ঋণ ও দায়' },
+            { id: 'lending', labelEn: 'Lent & Receivables', labelBn: 'ধার ও পাওনা' },
           ] as const
         ).map((tab) => (
           <button
@@ -191,7 +196,7 @@ export const ReportsView: React.FC = () => {
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            {tab.label}
+            {isBn ? tab.labelBn : tab.labelEn}
           </button>
         ))}
       </div>
@@ -200,7 +205,7 @@ export const ReportsView: React.FC = () => {
       <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-300">
           <Calendar className="w-4 h-4 text-emerald-500" />
-          <span>Report Date Range:</span>
+          <span>{isBn ? 'রিপোর্টের সময়কাল:' : 'Report Date Range:'}</span>
         </div>
         <div className="flex items-center gap-2">
           <input
@@ -209,7 +214,7 @@ export const ReportsView: React.FC = () => {
             onChange={(e) => setCustomStartDate(e.target.value)}
             className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white"
           />
-          <span className="text-slate-400">to</span>
+          <span className="text-slate-400">{isBn ? 'থেকে' : 'to'}</span>
           <input
             type="date"
             value={customEndDate}
@@ -224,7 +229,7 @@ export const ReportsView: React.FC = () => {
               }}
               className="text-[11px] text-slate-400 hover:text-slate-600 underline ml-2"
             >
-              Reset
+              {isBn ? 'রিসেট' : 'Reset'}
             </button>
           )}
         </div>
@@ -233,28 +238,36 @@ export const ReportsView: React.FC = () => {
       {/* KPI Financial Overview */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-          <span className="text-[11px] font-semibold text-slate-500">Period Income</span>
+          <span className="text-[11px] font-semibold text-slate-500">
+            {isBn ? 'সময়কালের আয়' : 'Period Income'}
+          </span>
           <div className="text-xl font-bold font-mono tabular-nums text-emerald-600 dark:text-emerald-400 mt-1">
             {formatBDT(totals.income)}
           </div>
         </div>
 
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-          <span className="text-[11px] font-semibold text-slate-500">Personal Spending</span>
+          <span className="text-[11px] font-semibold text-slate-500">
+            {isBn ? 'ব্যক্তিগত ব্যয়' : 'Personal Spending'}
+          </span>
           <div className="text-xl font-bold font-mono tabular-nums text-rose-600 dark:text-rose-400 mt-1">
             {formatBDT(totals.personal)}
           </div>
         </div>
 
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-          <span className="text-[11px] font-semibold text-slate-500">Office Spending</span>
+          <span className="text-[11px] font-semibold text-slate-500">
+            {isBn ? 'অফিস খরচ' : 'Office Spending'}
+          </span>
           <div className="text-xl font-bold font-mono tabular-nums text-amber-600 dark:text-amber-400 mt-1">
             {formatBDT(totals.office)}
           </div>
         </div>
 
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
-          <span className="text-[11px] font-semibold text-slate-500">Net Period Savings</span>
+          <span className="text-[11px] font-semibold text-slate-500">
+            {isBn ? 'নিট সঞ্চয়' : 'Net Period Savings'}
+          </span>
           <div
             className={`text-xl font-bold font-mono tabular-nums mt-1 ${
               totals.netSavings >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
@@ -270,9 +283,13 @@ export const ReportsView: React.FC = () => {
         {/* Monthly Income vs Expense Trend */}
         <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
           <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
-            12-Month Cashflow Trend
+            {isBn ? '১২ মাসের ক্যাশফ্লো প্রবণতা' : '12-Month Cashflow Trend'}
           </h3>
-          <p className="text-[11px] text-slate-500 mb-4">Monthly Income compared to Personal & Office Expenses</p>
+          <p className="text-[11px] text-slate-500 mb-4">
+            {isBn
+              ? 'ব্যক্তিগত ও অফিস খরচের সাথে আয়ের তুলনা'
+              : 'Monthly Income compared to Personal & Office Expenses'}
+          </p>
 
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -290,9 +307,9 @@ export const ReportsView: React.FC = () => {
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
-                <Bar dataKey="income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="personal" name="Personal" fill="#f43f5e" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="office" name="Office" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="income" name={isBn ? 'আয়' : 'Income'} fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="personal" name={isBn ? 'ব্যক্তিগত' : 'Personal'} fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="office" name={isBn ? 'অফিস' : 'Office'} fill="#f59e0b" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -301,9 +318,11 @@ export const ReportsView: React.FC = () => {
         {/* Category Expense Breakdown */}
         <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
           <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
-            Category Breakdown
+            {isBn ? 'ক্যাটাগরি ভিত্তিক ব্যয়' : 'Category Breakdown'}
           </h3>
-          <p className="text-[11px] text-slate-500 mb-4">Relative proportion of expenses</p>
+          <p className="text-[11px] text-slate-500 mb-4">
+            {isBn ? 'ব্যয়ের আনুপাতিক অনুপাত' : 'Relative proportion of expenses'}
+          </p>
 
           <div className="h-64 w-full">
             {categoryPieData.length > 0 ? (
@@ -322,7 +341,7 @@ export const ReportsView: React.FC = () => {
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(v: any) => [formatBDT(Number(v)), 'Amount']}
+                    formatter={(v: any) => [formatBDT(Number(v)), isBn ? 'পরিমাণ' : 'Amount']}
                     contentStyle={{
                       backgroundColor: '#0f172a',
                       border: '1px solid #1e293b',
@@ -336,7 +355,7 @@ export const ReportsView: React.FC = () => {
               </ResponsiveContainer>
             ) : (
               <div className="h-full flex items-center justify-center text-xs text-slate-400">
-                No expense data available for selected filters
+                {isBn ? 'নির্বাচিত ফিল্টারে কোনো ব্যয়ের তথ্য নেই' : 'No expense data available for selected filters'}
               </div>
             )}
           </div>
@@ -348,9 +367,11 @@ export const ReportsView: React.FC = () => {
         {/* Borrowed vs Repaid */}
         <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
           <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
-            Liabilities: Borrowed vs Repaid
+            {isBn ? 'দায়: ধার গ্রহণ বনাম পরিশোধ' : 'Liabilities: Borrowed vs Repaid'}
           </h3>
-          <p className="text-[11px] text-slate-500 mb-4">Debt status & outstanding debt liability</p>
+          <p className="text-[11px] text-slate-500 mb-4">
+            {isBn ? 'ঋণের অবস্থা এবং বকেয়া দেনা' : 'Debt status & outstanding debt liability'}
+          </p>
 
           <div className="h-44 w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -368,9 +389,9 @@ export const ReportsView: React.FC = () => {
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: '11px' }} />
-                <Bar dataKey="Borrowed" fill="#ea580c" radius={[0, 4, 4, 0]} />
-                <Bar dataKey="Repaid" fill="#10b981" radius={[0, 4, 4, 0]} />
-                <Bar dataKey="Remaining" fill="#dc2626" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="Borrowed" name={isBn ? 'গৃহীত ধার' : 'Borrowed'} fill="#ea580c" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="Repaid" name={isBn ? 'পরিশোধিত' : 'Repaid'} fill="#10b981" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="Remaining" name={isBn ? 'অবশিষ্ট বকেয়া' : 'Remaining'} fill="#dc2626" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -379,9 +400,11 @@ export const ReportsView: React.FC = () => {
         {/* Lent vs Collected */}
         <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
           <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
-            Receivables: Lent vs Collected
+            {isBn ? 'পাওনা: অন্যকে প্রদত্ত ধার বনাম আদায়' : 'Receivables: Lent vs Collected'}
           </h3>
-          <p className="text-[11px] text-slate-500 mb-4">Receivable asset status & money owed to you</p>
+          <p className="text-[11px] text-slate-500 mb-4">
+            {isBn ? 'প্রাপ্য সম্পদের অবস্থা এবং আপনার পাওনা টাকা' : 'Receivable asset status & money owed to you'}
+          </p>
 
           <div className="h-44 w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -399,9 +422,9 @@ export const ReportsView: React.FC = () => {
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: '11px' }} />
-                <Bar dataKey="Lent" fill="#2563eb" radius={[0, 4, 4, 0]} />
-                <Bar dataKey="Collected" fill="#10b981" radius={[0, 4, 4, 0]} />
-                <Bar dataKey="Remaining" fill="#4f46e5" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="Lent" name={isBn ? 'প্রদত্ত ধার' : 'Lent'} fill="#2563eb" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="Collected" name={isBn ? 'আদায়কৃত' : 'Collected'} fill="#10b981" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="Remaining" name={isBn ? 'অবশিষ্ট বকেয়া' : 'Remaining'} fill="#4f46e5" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

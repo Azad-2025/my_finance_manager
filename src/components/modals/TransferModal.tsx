@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, ArrowRight, DollarSign } from 'lucide-react';
 import { useFinance } from '../../context/FinanceContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { formatBDT } from '../../utils/formatters';
 
 interface TransferModalProps {
@@ -10,6 +11,8 @@ interface TransferModalProps {
 
 export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose }) => {
   const { accounts, transferBetweenAccounts } = useFinance();
+  const { language } = useLanguage();
+  const isBn = language === 'bn';
 
   const [fromAccountId, setFromAccountId] = useState(accounts[0]?.id || '');
   const [toAccountId, setToAccountId] = useState(accounts[1]?.id || '');
@@ -28,21 +31,25 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose })
     setError('');
 
     if (!fromAccountId || !toAccountId) {
-      setError('Please select both source and destination accounts.');
+      setError(isBn ? 'উৎস এবং গন্তব্য উভয় অ্যাকাউন্ট নির্বাচন করুন।' : 'Please select both source and destination accounts.');
       return;
     }
     if (fromAccountId === toAccountId) {
-      setError('Source and destination accounts must be different.');
+      setError(isBn ? 'উৎস এবং গন্তব্য অ্যাকাউন্ট ভিন্ন হতে হবে।' : 'Source and destination accounts must be different.');
       return;
     }
 
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
-      setError('Please enter a valid transfer amount.');
+      setError(isBn ? 'দয়া করে একটি সঠিক স্থানান্তরের পরিমাণ দিন।' : 'Please enter a valid transfer amount.');
       return;
     }
     if (fromAccount && numAmount > fromAccount.balance) {
-      setError(`Insufficient balance in ${fromAccount.name} (${formatBDT(fromAccount.balance)} available).`);
+      setError(
+        isBn
+          ? `${fromAccount.name} অ্যাকাউন্টে অপর্যাপ্ত ব্যালেন্স (${formatBDT(fromAccount.balance)} অবশিষ্ট)।`
+          : `Insufficient balance in ${fromAccount.name} (${formatBDT(fromAccount.balance)} available).`
+      );
       return;
     }
 
@@ -52,18 +59,22 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose })
       setSubmitting(false);
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Transfer failed');
+      setError(err.message || (isBn ? 'স্থানান্তর ব্যর্থ হয়েছে' : 'Transfer failed'));
       setSubmitting(false);
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-8">
+      <div className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-150">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800">
           <div>
-            <h3 className="text-base font-bold text-slate-900 dark:text-white">Account Transfer</h3>
-            <p className="text-[11px] text-slate-500">Move funds between your accounts (Balance Neutral)</p>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">
+              {isBn ? 'অ্যাকাউন্ট স্থানান্তর' : 'Account Transfer'}
+            </h3>
+            <p className="text-[11px] text-slate-500">
+              {isBn ? 'নিজের এক অ্যাকাউন্ট থেকে অন্যটিতে অর্থ স্থানান্তর' : 'Move funds between your accounts (Balance Neutral)'}
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -83,7 +94,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose })
           <div className="grid grid-cols-2 gap-3 items-center">
             <div>
               <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                From Account *
+                {isBn ? 'উৎস অ্যাকাউন্ট *' : 'From Account *'}
               </label>
               <select
                 value={fromAccountId}
@@ -100,7 +111,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose })
 
             <div>
               <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                To Account *
+                {isBn ? 'গন্তব্য অ্যাকাউন্ট *' : 'To Account *'}
               </label>
               <select
                 value={toAccountId}
@@ -118,7 +129,7 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose })
 
           <div>
             <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-              Transfer Amount (BDT / ৳) *
+              {isBn ? 'স্থানান্তরের পরিমাণ (BDT / ৳) *' : 'Transfer Amount (BDT / ৳) *'}
             </label>
             <div className="relative">
               <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">৳</span>
@@ -137,11 +148,11 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose })
 
           <div>
             <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-              Transfer Notes (Optional)
+              {isBn ? 'স্থানান্তর নোট (ঐচ্ছিক)' : 'Transfer Notes (Optional)'}
             </label>
             <textarea
               rows={2}
-              placeholder="e.g. Added money to bKash for weekend market"
+              placeholder={isBn ? 'যেমন: সাপ্তাহিক বাজার খরচের জন্য বিকাশ রিচার্জ' : 'e.g. Added money to bKash for weekend market'}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -154,14 +165,16 @@ export const TransferModal: React.FC<TransferModalProps> = ({ isOpen, onClose })
               onClick={onClose}
               className="px-4 py-2.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition"
             >
-              Cancel
+              {isBn ? 'বাতিল' : 'Cancel'}
             </button>
             <button
               type="submit"
               disabled={submitting}
               className="px-5 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition disabled:opacity-50"
             >
-              {submitting ? 'Transferring...' : 'Execute Transfer'}
+              {submitting
+                ? (isBn ? 'স্থানান্তর হচ্ছে...' : 'Transferring...')
+                : (isBn ? 'স্থানান্তর সম্পন্ন করুন' : 'Execute Transfer')}
             </button>
           </div>
         </form>

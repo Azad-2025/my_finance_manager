@@ -203,6 +203,7 @@ interface FinanceContextType {
 
   // Borrowing operations
   addBorrowing: (b: Omit<Borrowing, 'id' | 'repaid_amount' | 'status' | 'created_at' | 'updated_at'>) => Promise<Borrowing>;
+  updateBorrowing: (b: Borrowing) => Promise<void>;
   recordBorrowingRepayment: (
     borrowingId: string,
     amount: number,
@@ -214,6 +215,7 @@ interface FinanceContextType {
 
   // Lending operations
   addLending: (l: Omit<Lending, 'id' | 'collected_amount' | 'status' | 'created_at' | 'updated_at'>) => Promise<Lending>;
+  updateLending: (l: Lending) => Promise<void>;
   recordLendingCollection: (
     lendingId: string,
     amount: number,
@@ -944,6 +946,34 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
+  const updateBorrowing = async (b: Borrowing) => {
+    const nowStr = new Date().toISOString();
+    const repaid = Number(b.repaid_amount || 0);
+    const amount = Number(b.amount || 0);
+    const newStatus: Borrowing['status'] =
+      repaid >= amount ? 'Fully Repaid' : repaid > 0 ? 'Partially Repaid' : 'Unpaid';
+
+    const updated: Borrowing = {
+      ...b,
+      amount,
+      repaid_amount: repaid,
+      status: newStatus,
+      updated_at: nowStr,
+    };
+
+    setBorrowings((prev) => prev.map((item) => (item.id === b.id ? updated : item)));
+
+    const supabase = getSupabase();
+    if (navigator.onLine && supabase && user && isValidUUID(b.id)) {
+      try {
+        const sanitized = sanitizeForSupabase('borrowings', updated, user.id);
+        await supabase.from('borrowings').update(sanitized).eq('id', b.id);
+      } catch (err) {
+        console.debug('Borrowing update fallback:', err);
+      }
+    }
+  };
+
   const deleteBorrowing = async (id: string) => {
     setBorrowings((prev) => prev.filter((b) => b.id !== id));
     setBorrowingRepayments((prev) => prev.filter((r) => r.borrowing_id !== id));
@@ -1104,6 +1134,34 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         status: 'pending',
       });
       await refreshPendingCount();
+    }
+  };
+
+  const updateLending = async (l: Lending) => {
+    const nowStr = new Date().toISOString();
+    const collected = Number(l.collected_amount || 0);
+    const amount = Number(l.amount || 0);
+    const newStatus: Lending['status'] =
+      collected >= amount ? 'Fully Collected' : collected > 0 ? 'Partially Collected' : 'Uncollected';
+
+    const updated: Lending = {
+      ...l,
+      amount,
+      collected_amount: collected,
+      status: newStatus,
+      updated_at: nowStr,
+    };
+
+    setLendings((prev) => prev.map((item) => (item.id === l.id ? updated : item)));
+
+    const supabase = getSupabase();
+    if (navigator.onLine && supabase && user && isValidUUID(l.id)) {
+      try {
+        const sanitized = sanitizeForSupabase('lendings', updated, user.id);
+        await supabase.from('lendings').update(sanitized).eq('id', l.id);
+      } catch (err) {
+        console.debug('Lending update fallback:', err);
+      }
     }
   };
 
@@ -1837,9 +1895,11 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
         updateTransaction,
         deleteTransaction,
         addBorrowing,
+        updateBorrowing,
         recordBorrowingRepayment,
         deleteBorrowing,
         addLending,
+        updateLending,
         recordLendingCollection,
         deleteLending,
         recordOfficeReimbursement,
